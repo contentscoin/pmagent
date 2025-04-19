@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "src/jsonrpc-server.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/jsonrpc", "dest": "src/jsonrpc-server.js" },
+    { "src": "/(.*)", "dest": "src/jsonrpc-server.js" }
+  ],
+  "github": {
+    "enabled": true
+  }
+} 

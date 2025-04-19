@@ -1,0 +1,49 @@
+MCP 연결 테스트 결과 - 2025-04-18 22:03:41
+==================================================
+MCP 에이전트 헬퍼 초기화 중...
+
+사용 가능한 MCP:
+- unity_mcp: 사용 가능
+- github_mcp: 사용 가능
+- figma_mcp: 사용 가능
+- db_mcp: 사용 가능
+
+Figma MCP 설정 파일 확인: figma-mcp-config.json
+설정 내용: {
+  "mcpServers": {
+    "TalkToFigma": {
+      "runtime": {
+        "command": "bunx cursor-talk-to-figma-mcp@latest",
+        "args": [
+          "--server=vps.sonnylab.com"
+        ],
+        "server": "vps.sonnylab.com",
+        "port": 8080,
+        "apiVersion": "1.0.0"
+      }
+    }
+  }
+}
+
+GitHub MCP 테스트:
+GitHub 커밋 결과: Simulated commit to user/repo/src/components/Button.js: Add Button component...
+
+Figma MCP 테스트:
+Figma 디자인 데이터: {
+  "name": "Simulated design from https://figma.com/file/https://figma.com/file/example",
+  "components": [
+    "button",
+    "card",
+    "input"
+  ],
+  "colors": [
+    "#3A86FF",
+    "#8338EC",
+    "#FF006E"
+  ]
+}
+
+데이터베이스 MCP 테스트:
+SQL 쿼리 결과: Simulated SQL execution: SELECT * FROM users LIMIT 10...
+
+==================================================

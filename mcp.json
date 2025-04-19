@@ -1,0 +1,197 @@
+{
+  "servers": [
+    {
+      "qualifiedName": "pmagent-mcp-server",
+      "displayName": "PM 에이전트 MCP 서버",
+      "description": "프로젝트 매니저 에이전트를 위한 MCP 서버입니다.",
+      "schemaVersion": "1.0.0",
+      "authMethods": ["none"],
+      "tools": [
+        {
+          "name": "create_project",
+          "description": "새로운 프로젝트를 생성합니다.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "프로젝트 이름"
+              },
+              "description": {
+                "type": "string",
+                "description": "프로젝트 설명"
+              },
+              "goals": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "프로젝트 목표 목록"
+              }
+            },
+            "required": ["name", "description"]
+          },
+          "returnSchema": {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "assign_task",
+          "description": "작업을 할당합니다.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "작업 제목"
+              },
+              "description": {
+                "type": "string",
+                "description": "작업 설명"
+              },
+              "priority": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "critical"],
+                "description": "작업 우선순위"
+              },
+              "projectId": {
+                "type": "string",
+                "description": "프로젝트 ID"
+              }
+            },
+            "required": ["title", "description", "priority", "projectId"]
+          },
+          "returnSchema": {
+            "type": "object",
+            "properties": {
+              "taskId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "create_ml_model",
+          "description": "머신러닝 모델을 생성합니다.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "모델 이름"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["classification", "regression", "clustering", "reinforcement", "nlp", "computer_vision"],
+                "description": "모델 유형"
+              },
+              "description": {
+                "type": "string",
+                "description": "모델 설명"
+              },
+              "architecture": {
+                "type": "string",
+                "description": "모델 아키텍처"
+              }
+            },
+            "required": ["name", "type", "description", "architecture"]
+          },
+          "returnSchema": {
+            "type": "object",
+            "properties": {
+              "modelId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "github_commit",
+          "description": "GitHub에 코드를 커밋합니다.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "repository": {
+                "type": "string",
+                "description": "GitHub 저장소 URL"
+              },
+              "branch": {
+                "type": "string",
+                "description": "브랜치 이름"
+              },
+              "message": {
+                "type": "string",
+                "description": "커밋 메시지"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "파일 경로"
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "파일 내용"
+                    }
+                  },
+                  "required": ["path", "content"]
+                },
+                "description": "커밋할 파일 목록"
+              },
+              "author": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "작성자 이름"
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "작성자 이메일"
+                  }
+                },
+                "required": ["name", "email"],
+                "description": "커밋 작성자 정보"
+              }
+            },
+            "required": ["repository", "branch", "message", "files", "author"]
+          },
+          "returnSchema": {
+            "type": "object",
+            "properties": {
+              "commitId": {
+                "type": "string"
+              },
+              "sha": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+} 

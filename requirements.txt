@@ -1,0 +1,16 @@
+# 핵심 의존성
+requests>=2.25.0
+typing-extensions>=4.0.0
+
+# AI 제공자 관련 라이브러리
+openai>=1.0.0
+google-generativeai>=0.3.0
+
+# 유틸리티
+python-dotenv>=0.15.0
+pydantic>=2.0.0
+
+# 개발용 도구 (선택 사항)
+pytest>=7.0.0
+black>=22.0.0
+isort>=5.0.0 

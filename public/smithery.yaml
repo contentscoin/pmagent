@@ -1,0 +1,42 @@
+name: pmagent-mcp-server
+displayName: PM 에이전트 MCP 서버
+description: PM 에이전트 시스템을 위한 MCP 서버입니다.
+version: 1.0.0
+transport: jsonrpc
+
+tools:
+  - name: create_project
+    description: 새로운 프로젝트를 생성합니다.
+    parameters:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 프로젝트 이름
+        description:
+          type: string
+          description: 프로젝트 설명
+      required: ['name']
+
+  - name: assign_task
+    description: 특정 에이전트에게 작업을 할당합니다.
+    parameters:
+      type: object
+      properties:
+        taskId:
+          type: string
+          description: 작업 ID
+        agentType:
+          type: string
+          description: 에이전트 유형 (designer, frontend, backend, ai_engineer)
+      required: ['taskId', 'agentType']
+
+  - name: get_project_status
+    description: 현재 프로젝트 상태를 가져옵니다.
+    parameters:
+      type: object
+      properties:
+        projectId:
+          type: string
+          description: 프로젝트 ID
+      required: ['projectId'] 

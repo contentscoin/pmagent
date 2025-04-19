@@ -1,0 +1,31 @@
+
+==================================================
+================ 간단한 에이전트 시스템 테스트 ================
+==================================================
+
+
+=== 테스트 1: 모델 자동 대체 기능 ===
+디자이너 에이전트 생성 성공: DesignerAgentOllama
+사용된 모델: llama3.2:latest
+
+=== 테스트 2: 모든 에이전트 생성 ===
+모든 에이전트 생성 성공!
+생성된 에이전트: designer, frontend, backend, ai_engineer, pm
+
+생성된 에이전트 정보:
+- designer: DesignerAgentOllama, 모델: llama3.2:latest
+- frontend: FrontendAgentOllama, 모델: llama3.2:latest
+- backend: BackendAgentOllama, 모델: llama3.2:latest
+- ai_engineer: AIEngineerAgentOllama, 모델: llama3.2:latest
+- pm: PMAgentOllama, 모델: llama3.2:latest
+
+=== 테스트 3: MCP 헬퍼 ===
+사용 가능한 MCP:
+- unity_mcp: ✅ 사용 가능
+- github_mcp: ❌ 사용 불가
+- figma_mcp: ❌ 사용 불가
+- db_mcp: ❌ 사용 불가
+
+==================================================
+===================== 테스트 완료 =====================
+==================================================
