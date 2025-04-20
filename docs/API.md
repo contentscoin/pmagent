@@ -361,3 +361,51 @@ pmagent --action create --type task --project-id PROJECT_ID --name "새 태스�
 ```
 
 더 많은 옵션과 예제는 `pmagent --help`를 통해 확인할 수 있습니다. 
+
+@app.post("/")
+async def jsonrpc_endpoint(request: Request):
+    data = await request.json()
+    
+    if data.get("method") == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": data.get("id"),
+            "result": {
+                "name": "pmagent-mcp-server",
+                "version": "0.1.0",
+                "tools": TOOLS
+            }
+        }
+    
+    if data.get("method") == "tools/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": data.get("id"),
+            "result": {"tools": TOOLS}
+        }
+    
+    if data.get("method") == "tools/invoke":
+        params = data.get("params", {})
+        tool_name = params.get("name")
+        tool_params = params.get("parameters", {})
+        
+        if tool_name in TOOL_FUNCTIONS:
+            try:
+                result = TOOL_FUNCTIONS[tool_name](tool_params)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": data.get("id"),
+                    "result": result
+                }
+            except Exception as e:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": data.get("id"),
+                    "error": {"message": str(e)}
+                }
+    
+    return {
+        "jsonrpc": "2.0",
+        "id": data.get("id"),
+        "error": {"message": "Method not found"}
+    } 
