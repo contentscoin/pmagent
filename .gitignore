@@ -36,4 +36,20 @@ Thumbs.db
 
 # 캐시
 .cache/
-.npm/ 
+.npm/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 데이터 디렉토리
+data/ 

@@ -11,7 +11,9 @@
     "build": "echo 'Build completed'",
     "vercel-build": "echo 'Vercel 빌드 스크립트 실행 완료'",
     "deploy": "vercel --prod",
-    "test:client": "node test_client.js"
+    "test:client": "node test_client.js",
+    "smithery:register": "node register_smithery.js",
+    "server:python": "python -m pmagent.server"
   },
   "keywords": [
     "mcp",

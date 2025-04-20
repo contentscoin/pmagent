@@ -13,6 +13,8 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
 # 로깅 설정
@@ -38,6 +40,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 정적 파일 마운트
+static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "public")
+Path(static_dir).mkdir(exist_ok=True, parents=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # 환경 변수에서 설정 로드
 DATA_DIR = os.environ.get("DATA_DIR", "./data")
@@ -494,10 +501,26 @@ async def jsonrpc_endpoint(request: Request):
         "error": {"message": "Method not found"}
     }
 
+# smithery-simple.json 파일 엔드포인트
+@app.get("/smithery-simple.json")
+async def get_smithery_simple():
+    smithery_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "smithery-simple.json")
+    if os.path.exists(smithery_path):
+        return FileResponse(smithery_path)
+    
+    # 파일이 없으면 기본 정보 반환
+    return JSONResponse({
+        "qualifiedName": "pmagent",
+        "displayName": "PM Agent MCP Server",
+        "description": "프로젝트 관리를 위한 MCP(Model Context Protocol) 서버",
+        "version": "0.1.0",
+        "baseUrl": app.root_path or "https://pmagent.vercel.app"
+    })
+
 def main():
     """서버 실행 함수"""
     host = os.environ.get("SERVER_HOST", "0.0.0.0")
-    port = int(os.environ.get("SERVER_PORT", 8080))
+    port = int(os.environ.get("SERVER_PORT", 8081))
     
     logger.info(f"PMAgent MCP 서버 시작: http://{host}:{port}")
     

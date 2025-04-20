@@ -6,7 +6,7 @@ import argparse
 import logging
 from datetime import datetime
 import sys
-from .agent import PMAgent
+from pmagent.agent import PMAgent
 
 # 로깅 설정
 logging.basicConfig(

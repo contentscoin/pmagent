@@ -1,0 +1,7 @@
+{
+  "qualifiedName": "pmagent",
+  "displayName": "PM Agent MCP Server",
+  "description": "프로젝트 관리를 위한 MCP(Model Context Protocol) 서버",
+  "version": "0.1.0",
+  "baseUrl": "https://pmagent.vercel.app"
+} 
