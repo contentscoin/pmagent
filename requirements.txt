@@ -1,33 +1,9 @@
 # 핵심 의존성
-requests>=2.25.0
-typing-extensions>=4.0.0
-
-# AI 제공자 관련 라이브러리
-openai>=1.0.0
-google-generativeai>=0.3.0
-
-# 유틸리티
-python-dotenv>=0.15.0
-pydantic>=2.0.0
-
-# 개발용 도구 (선택 사항)
-pytest>=7.0.0
-black>=22.0.0
-isort>=5.0.0
-
-# MCP 에이전트에 필요한 파이썬 패키지
-aiohttp==3.9.1
-asyncio==3.4.3
-
-# 추가된 패키지
 fastapi==0.104.1
 uvicorn==0.23.2
+pydantic==2.4.2
+aiohttp==3.9.1
 requests==2.31.0
 python-dotenv==1.0.0
-pydantic==2.4.2
-pytest==7.4.3
+typing-extensions==4.8.0
 httpx==0.25.1
-uuid==1.30
-sqlalchemy==2.0.23
-databases==0.8.0
-aiosqlite==0.19.0 
