@@ -10,7 +10,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "echo 'Build completed'",
     "vercel-build": "echo 'Vercel 빌드 스크립트 실행 완료'",
-    "deploy": "vercel --prod"
+    "deploy": "vercel --prod",
+    "test:client": "node test_client.js"
   },
   "keywords": [
     "mcp",
@@ -28,6 +29,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.2.2",
     "morgan": "^1.10.0",
+    "node-fetch": "^3.3.2",
     "uuid": "^9.0.1",
     "zod": "^3.22.4"
   },
