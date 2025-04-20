@@ -1,4 +1,5 @@
 # PMAgent
+[![smithery badge](https://smithery.ai/badge/@contentscoin/pmagent)](https://smithery.ai/server/@contentscoin/pmagent)
 
 PMAgent는 프로젝트 관리를 위한 MCP(Model Context Protocol) 서버 및 Python 클라이언트 라이브러리입니다. 이 도구를 사용하면 프로젝트와 태스크를 쉽게 생성, 관리, 업데이트할 수 있습니다.
 
@@ -12,6 +13,15 @@ PMAgent는 프로젝트 관리를 위한 MCP(Model Context Protocol) 서버 및 
 
 ## 설치
 
+### Installing via Smithery
+
+To install  PMAgent MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@contentscoin/pmagent):
+
+```bash
+npx -y @smithery/cli install @contentscoin/pmagent --client claude
+```
+
+### Installing Manually
 Python 패키지로 설치할 수 있습니다:
 
 ```bash
