@@ -1,5 +1,22 @@
-name: pmagent-mcp-server
-displayName: PMAgent MCP 서버
-description: 프로젝트 관리를 위한 MCP 서버
-version: 0.1.0
-transport: jsonrpc
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    properties:
+      id:
+        type: number
+      method:
+        type: string
+      params:
+        type: object
+      jsonrpc:
+        type: string
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |
+    function (command) {
+      return { command: command };
+    }
