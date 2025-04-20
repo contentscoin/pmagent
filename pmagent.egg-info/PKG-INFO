@@ -1,3 +1,48 @@
+Metadata-Version: 2.4
+Name: pmagent
+Version: 0.1.0
+Summary: 프로젝트 관리를 위한 MCP 에이전트 및 클라이언트 라이브러리
+Home-page: https://github.com/yourusername/pmagent
+Author: PMAgent Team
+Author-email: pmagent@example.com
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: aiohttp>=3.7.0
+Requires-Dist: requests>=2.25.0
+Requires-Dist: pydantic>=1.8.0
+Requires-Dist: fastapi>=0.68.0
+Requires-Dist: uvicorn>=0.15.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=3.0.0; extra == "dev"
+Requires-Dist: flake8>=4.0.0; extra == "dev"
+Requires-Dist: black>=22.0.0; extra == "dev"
+Requires-Dist: isort>=5.10.0; extra == "dev"
+Requires-Dist: tox>=3.24.0; extra == "dev"
+Requires-Dist: pre-commit>=2.17.0; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
 # PMAgent
 
 PMAgent는 프로젝트 관리를 위한 MCP(Model Context Protocol) 서버 및 Python 클라이언트 라이브러리입니다. 이 도구를 사용하면 프로젝트와 태스크를 쉽게 생성, 관리, 업데이트할 수 있습니다.

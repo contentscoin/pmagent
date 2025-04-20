@@ -1,0 +1,3 @@
+[console_scripts]
+pmagent-client = pmagent.test_client:cli_entry_point
+pmagent-server = pmagent.server:main
