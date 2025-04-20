@@ -3,9 +3,23 @@ displayName: PM 에이전트 MCP 서버
 description: PM 에이전트 시스템을 위한 MCP 서버입니다.
 version: 1.0.0
 startCommand:
-  type: "http"
+  type: "stdio"
   command: "npm start"
-  port: 4000
+  configSchema:
+    type: "object"
+    properties:
+      jsonrpc:
+        type: "string"
+      id:
+        type: "number"
+      method:
+        type: "string"
+      params:
+        type: "object"
+  commandFunction: |
+    function (command) {
+      return { command: command };
+    }
 transport: jsonrpc
 
 tools:
