@@ -1,0 +1,14 @@
+.git/
+.github/
+.pytest_cache/
+__pycache__/
+tests/
+examples/
+data/
+docs/
+node_modules/
+.venv/
+pmagent.egg-info/
+*.pyc
+*.pyo
+*.swp 

@@ -6,6 +6,12 @@
   "routes": [
     { "src": "/(.*)", "dest": "api/index.py" }
   ],
+  "functions": {
+    "api/index.py": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "github": {
     "enabled": true
   }
