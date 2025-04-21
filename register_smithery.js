@@ -20,7 +20,7 @@ const smitheryJsonPath = path.join(__dirname, 'smithery-simple.json');
 let smitheryJson = JSON.parse(fs.readFileSync(smitheryJsonPath, 'utf8'));
 
 // baseUrl 업데이트
-smitheryJson.baseUrl = "https://pmagent.vercel.app";
+smitheryJson.baseUrl = "https://pmagent-k5dwxsuwl-jakes-projects-0ab50f91.vercel.app";
 
 // 업데이트된 JSON 파일 저장
 fs.writeFileSync(smitheryJsonPath, JSON.stringify(smitheryJson, null, 2), 'utf8');
@@ -34,7 +34,7 @@ console.log(`JSON-RPC 엔드포인트: ${smitheryJson.transport.jsonrpc.endpoint
 
 try {
   // 스미더리 CLI 사용하여 등록
-  const command = `npx @smithery/cli register --name ${smitheryJson.qualifiedName} --url ${smitheryJson.baseUrl} --version ${smitheryJson.version}`;
+  const command = `npx @smithery/cli register --name ${smitheryJson.qualifiedName} --url ${smitheryJson.baseUrl} --version ${smitheryJson.version} --client cursor`;
   
   console.log(`실행 명령: ${command}`);
   const output = execSync(command, { encoding: 'utf8' });
@@ -44,7 +44,7 @@ try {
   
   // 등록 확인
   console.log('등록된 서버 목록:');
-  const listOutput = execSync('npx @smithery/cli list', { encoding: 'utf8' });
+  const listOutput = execSync('npx @smithery/cli list --client cursor', { encoding: 'utf8' });
   console.log(listOutput);
   
 } catch (error) {
