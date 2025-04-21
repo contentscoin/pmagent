@@ -13,9 +13,9 @@ PMAgent에 기여하는 방법은 여러 가지가 있습니다:
 
 ## 개발 환경 설정
 
-1. 이 저장소를 클론합니다:
+1. 저장소를 복제하세요:
    ```bash
-   git clone https://github.com/yourusername/pmagent.git
+   git clone https://github.com/contentscoin/pmagent.git
    cd pmagent
    ```
 

@@ -3,5 +3,17 @@
   "displayName": "PM Agent MCP Server",
   "description": "프로젝트 관리를 위한 MCP(Model Context Protocol) 서버",
   "version": "0.1.0",
-  "baseUrl": "https://pmagent.vercel.app"
-} 
+  "baseUrl": "https://pmagent.vercel.app",
+  "apiVersion": "1.0",
+  "transport": {
+    "type": "http",
+    "jsonrpc": {
+      "endpoint": "/api"
+    }
+  },
+  "documentationUrl": "https://github.com/contentscoin/pmagent",
+  "publisher": {
+    "name": "PMAgent Team",
+    "url": "https://github.com/contentscoin/pmagent"
+  }
+}

@@ -1,8 +1,20 @@
 {
-  "mcp_server": {
-    "url": "https://pmagent-jakes-projects-0ab50f91.vercel.app/api/jsonrpc",
+  "server": {
+    "name": "pmagent",
+    "url": "https://pmagent.vercel.app/api",
     "transport": "jsonrpc",
-    "timeout": 30000
+    "tools": [
+      "list_projects",
+      "create_project",
+      "get_project",
+      "update_project",
+      "delete_project",
+      "list_tasks",
+      "create_task",
+      "get_task",
+      "update_task",
+      "delete_task"
+    ]
   },
   "agents": {
     "pm": {

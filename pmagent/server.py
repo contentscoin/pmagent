@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
@@ -516,6 +516,107 @@ async def get_smithery_simple():
         "version": "0.1.0",
         "baseUrl": app.root_path or "https://pmagent.vercel.app"
     })
+
+# WebSocket 엔드포인트 추가
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket 엔드포인트 - MCP 프로토콜을 처리합니다.
+    """
+    await websocket.accept()
+    logger.info("WebSocket 연결이 수립되었습니다.")
+    
+    try:
+        while True:
+            # JSON 메시지 수신
+            data = await websocket.receive_json()
+            
+            # MCP 메시지 구조 확인
+            if "jsonrpc" not in data or data.get("jsonrpc") != "2.0":
+                await websocket.send_json({
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32600, "message": "유효하지 않은 요청"},
+                    "id": data.get("id")
+                })
+                continue
+            
+            method = data.get("method")
+            params = data.get("params", {})
+            request_id = data.get("id")
+            
+            # MCP 초기화 처리
+            if method == "initialize":
+                await websocket.send_json({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "name": "PMAgent MCP Server",
+                        "version": "0.1.0",
+                        "tools": TOOLS
+                    }
+                })
+            
+            # 도구 목록 요청 처리
+            elif method == "tools/list":
+                await websocket.send_json({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"tools": TOOLS}
+                })
+            
+            # 도구 호출 처리
+            elif method == "tools/invoke":
+                tool_name = params.get("name")
+                tool_params = params.get("parameters", {})
+                
+                if tool_name in TOOL_FUNCTIONS:
+                    try:
+                        result = TOOL_FUNCTIONS[tool_name](tool_params)
+                        await websocket.send_json({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "result": result
+                        })
+                    except Exception as e:
+                        logger.error(f"도구 호출 중 오류 발생: {e}", exc_info=True)
+                        await websocket.send_json({
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "error": {"code": -32000, "message": str(e)}
+                        })
+                else:
+                    await websocket.send_json({
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {"code": -32601, "message": f"도구를 찾을 수 없습니다: {tool_name}"}
+                    })
+            
+            # 알 수 없는 메서드 처리
+            else:
+                await websocket.send_json({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32601, "message": f"메서드를 찾을 수 없습니다: {method}"}
+                })
+                
+    except WebSocketDisconnect:
+        logger.info("WebSocket 연결이 종료되었습니다.")
+    except Exception as e:
+        logger.error(f"WebSocket 처리 중 오류 발생: {e}", exc_info=True)
+        try:
+            await websocket.send_json({
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": str(e)},
+                "id": None
+            })
+        except:
+            pass
+
+# MCP WebSocket 엔드포인트 (별칭)
+@app.websocket("/mcp")
+async def mcp_endpoint(websocket: WebSocket):
+    """MCP 전용 WebSocket 엔드포인트 (별칭)"""
+    await websocket_endpoint(websocket)
 
 def main():
     """서버 실행 함수"""

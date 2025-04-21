@@ -2,7 +2,7 @@ Metadata-Version: 2.4
 Name: pmagent
 Version: 0.1.0
 Summary: 프로젝트 관리를 위한 MCP 에이전트 및 클라이언트 라이브러리
-Home-page: https://github.com/yourusername/pmagent
+Home-page: https://github.com/contentscoin/pmagent
 Author: PMAgent Team
 Author-email: pmagent@example.com
 Classifier: Programming Language :: Python :: 3

@@ -22,7 +22,7 @@ pip install pmagent
 또는 소스코드에서 직접 설치할 수 있습니다:
 
 ```bash
-git clone https://github.com/yourusername/pmagent-mcp-server.git
+git clone https://github.com/contentscoin/pmagent-mcp-server.git
 cd pmagent-mcp-server
 pip install -e .
 ```
@@ -165,4 +165,4 @@ python run_tests.py tests/test_agent.py
 
 - [API 문서](./API.md): 자세한 API 설명
 - [로드맵](./ROADMAP.md): 향후 개발 계획
-- [GitHub 저장소](https://github.com/yourusername/pmagent-mcp-server): 최신 소스코드 및 이슈 추적 
+- [GitHub 저장소](https://github.com/contentscoin/pmagent-mcp-server): 최신 소스코드 및 이슈 추적 

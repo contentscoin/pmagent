@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { createServer } from 'http';
 
 // __dirname 구현 (ES 모듈에서는 __dirname이 기본적으로 없음)
 const __filename = fileURLToPath(import.meta.url);
@@ -385,8 +386,257 @@ app.use((err, req, res, next) => {
   });
 });
 
+// MCP 도구 정의 (파이썬 코드와 동일한 구조 유지)
+const TOOLS = [
+  {
+    name: "list_projects",
+    description: "프로젝트 목록을 가져옵니다.",
+    parameters: {}
+  },
+  {
+    name: "create_project",
+    description: "새 프로젝트를 생성합니다.",
+    parameters: {
+      name: "프로젝트 이름",
+      description: "프로젝트 설명 (선택)"
+    }
+  },
+  {
+    name: "get_project",
+    description: "프로젝트 정보를 가져옵니다.",
+    parameters: {
+      project_id: "프로젝트 ID"
+    }
+  },
+  {
+    name: "update_project",
+    description: "프로젝트 정보를 업데이트합니다.",
+    parameters: {
+      project_id: "프로젝트 ID",
+      name: "새 프로젝트 이름 (선택)",
+      description: "새 프로젝트 설명 (선택)"
+    }
+  },
+  {
+    name: "delete_project",
+    description: "프로젝트를 삭제합니다.",
+    parameters: {
+      project_id: "프로젝트 ID"
+    }
+  },
+  {
+    name: "list_tasks",
+    description: "프로젝트의 모든 태스크 목록을 가져옵니다.",
+    parameters: {
+      project_id: "프로젝트 ID"
+    }
+  },
+  {
+    name: "create_task",
+    description: "새 태스크를 생성합니다.",
+    parameters: {
+      project_id: "프로젝트 ID",
+      name: "태스크 이름",
+      description: "태스크 설명 (선택)",
+      status: "태스크 상태 (선택, 기본값: 'TODO')",
+      due_date: "마감일 (선택, ISO 형식)",
+      assignee: "담당자 (선택)"
+    }
+  },
+  {
+    name: "get_task",
+    description: "태스크 정보를 가져옵니다.",
+    parameters: {
+      project_id: "프로젝트 ID",
+      task_id: "태스크 ID"
+    }
+  },
+  {
+    name: "update_task",
+    description: "태스크 정보를 업데이트합니다.",
+    parameters: {
+      project_id: "프로젝트 ID",
+      task_id: "태스크 ID",
+      name: "새 태스크 이름 (선택)",
+      description: "새 태스크 설명 (선택)",
+      status: "새 태스크 상태 (선택)",
+      due_date: "새 마감일 (선택, ISO 형식)",
+      assignee: "새 담당자 (선택)"
+    }
+  },
+  {
+    name: "delete_task",
+    description: "태스크를 삭제합니다.",
+    parameters: {
+      project_id: "프로젝트 ID",
+      task_id: "태스크 ID"
+    }
+  }
+];
+
+// 간단한 스토리지 시뮬레이션 (실제 구현에서는 데이터베이스 사용)
+const projects = [
+  {
+    id: "project-1",
+    name: "샘플 프로젝트 1",
+    description: "샘플 프로젝트 설명",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "project-2",
+    name: "샘플 프로젝트 2",
+    description: "샘플 프로젝트 설명",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+
+const tasks = [
+  {
+    id: "task-1",
+    project_id: "project-1",
+    name: "샘플 태스크 1",
+    description: "샘플 태스크 설명",
+    status: "TODO",
+    assignee: "사용자",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "task-2",
+    project_id: "project-2",
+    name: "샘플 태스크 1",
+    description: "샘플 태스크 설명",
+    status: "TODO",
+    assignee: "사용자",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+
+// 도구 함수 구현
+const TOOL_FUNCTIONS = {
+  list_projects: () => {
+    return { projects };
+  },
+  
+  get_project: (params) => {
+    const project = projects.find(p => p.id === params.project_id);
+    if (!project) {
+      throw new Error(`프로젝트를 찾을 수 없습니다: ${params.project_id}`);
+    }
+    return { project };
+  },
+  
+  list_tasks: (params) => {
+    const projectTasks = tasks.filter(t => t.project_id === params.project_id);
+    return { tasks: projectTasks };
+  },
+  
+  get_task: (params) => {
+    const task = tasks.find(
+      t => t.id === params.task_id && t.project_id === params.project_id
+    );
+    if (!task) {
+      throw new Error(`태스크를 찾을 수 없습니다: ${params.task_id}`);
+    }
+    return { task };
+  }
+};
+
 // Vercel 서버리스 함수
 export default function handler(req, res) {
-  // Express 앱으로 요청 전달
-  return app(req, res);
+  // CORS 헤더 설정
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // OPTIONS 요청 처리
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  // GET 요청 처리
+  if (req.method === 'GET') {
+    res.status(200).json({
+      jsonrpc: "2.0",
+      name: "PM Agent MCP Server",
+      version: "0.1.0",
+      description: "프로젝트 관리를 위한 MCP(Model Context Protocol) 서버",
+      tools: TOOLS
+    });
+    return;
+  }
+  
+  // POST 요청 처리 (JSON-RPC)
+  if (req.method === 'POST') {
+    try {
+      const data = req.body;
+      
+      let response;
+      
+      if (data.method === "initialize") {
+        response = {
+          jsonrpc: "2.0",
+          id: data.id,
+          result: {
+            name: "PM Agent MCP Server",
+            version: "0.1.0",
+            tools: TOOLS
+          }
+        };
+      } else if (data.method === "tools/list") {
+        response = {
+          jsonrpc: "2.0",
+          id: data.id,
+          result: { tools: TOOLS }
+        };
+      } else if (data.method === "tools/invoke") {
+        const params = data.params || {};
+        const toolName = params.name;
+        const toolParams = params.parameters || {};
+        
+        if (TOOL_FUNCTIONS[toolName]) {
+          try {
+            const result = TOOL_FUNCTIONS[toolName](toolParams);
+            response = {
+              jsonrpc: "2.0",
+              id: data.id,
+              result: result
+            };
+          } catch (e) {
+            response = {
+              jsonrpc: "2.0",
+              id: data.id,
+              error: { message: e.message }
+            };
+          }
+        } else {
+          response = {
+            jsonrpc: "2.0",
+            id: data.id,
+            error: { message: `도구를 찾을 수 없습니다: ${toolName}` }
+          };
+        }
+      } else {
+        response = {
+          jsonrpc: "2.0",
+          id: data.id,
+          error: { message: "메서드를 찾을 수 없습니다" }
+        };
+      }
+      
+      res.status(200).json(response);
+    } catch (error) {
+      res.status(200).json({
+        jsonrpc: "2.0",
+        id: null,
+        error: { message: `오류: ${error.message}` }
+      });
+    }
+  } else {
+    res.status(405).json({ error: "Method not allowed" });
+  }
 } 

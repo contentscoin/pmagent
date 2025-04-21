@@ -1,31 +1,40 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "public/**",
-      "use": "@vercel/static"
+  "functions": {
+    "api/index.py": {
+      "runtime": "vercel-python@3.1.41",
+      "excludeFiles": "{.git,__pycache__,node_modules,tests,docs,examples}",
+      "memory": 1024
     }
-  ],
+  },
   "routes": [
     {
+      "src": "/api/jsonrpc",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/tools",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/invoke",
+      "dest": "/api/index.py"
+    },
+    {
       "src": "/smithery-simple.json",
-      "dest": "/api/index.js"
+      "dest": "/smithery-simple.json"
     },
     {
       "src": "/static/(.*)",
       "dest": "/public/$1"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.js"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/api/index.js"
+      "dest": "/api/index.py"
     }
   ],
   "env": {
@@ -33,5 +42,10 @@
   },
   "github": {
     "enabled": true
+  },
+  "build": {
+    "env": {
+      "PYTHON_VERSION": "3.9"
+    }
   }
 } 

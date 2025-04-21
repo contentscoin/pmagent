@@ -8,171 +8,221 @@ PMAgent MCP 서버는 프로젝트와 태스크 관리를 위한 도구를 제�
 
 ## 배포 정보
 
-- 프로덕션 URL: https://pmagent.vercel.app
-- 서버 정보 확인: https://pmagent.vercel.app/
-- 도구 목록 확인: https://pmagent.vercel.app/tools
+- 서버 주소: https://pmagent.vercel.app
+- 문서: https://github.com/contentscoin/pmagent
 
-## MCP 도구 목록
+## 사용 가능한 도구
 
-PMAgent MCP 서버는 다음과 같은 도구를 제공합니다:
+PMAgent MCP 서버에서는 다음과 같은 도구들을 사용할 수 있습니다.
 
-- `list_projects`: 프로젝트 목록을 가져옵니다.
+- `list_projects`: 모든 프로젝트 목록을 가져옵니다.
 - `create_project`: 새 프로젝트를 생성합니다.
-- `get_project`: 프로젝트 정보를 가져옵니다.
+- `get_project`: 특정 프로젝트의 정보를 가져옵니다.
 - `update_project`: 프로젝트 정보를 업데이트합니다.
 - `delete_project`: 프로젝트를 삭제합니다.
-- `list_tasks`: 프로젝트의 모든 태스크 목록을 가져옵니다.
+- `list_tasks`: 특정 프로젝트의 모든 태스크 목록을 가져옵니다.
 - `create_task`: 새 태스크를 생성합니다.
-- `get_task`: 태스크 정보를 가져옵니다.
+- `get_task`: 특정 태스크의 정보를 가져옵니다.
 - `update_task`: 태스크 정보를 업데이트합니다.
 - `delete_task`: 태스크를 삭제합니다.
 
-## MCP 서버 직접 사용 방법
+## API 직접 사용하기
 
-### 1. API 직접 호출
+PMAgent MCP 서버는 JSON-RPC 2.0 프로토콜을 사용합니다. 다음과 같이 API를 직접 호출할 수 있습니다.
 
-```bash
-# 서버 정보 확인
-curl https://pmagent.vercel.app/
-
-# 도구 목록 확인
-curl https://pmagent.vercel.app/tools
-
-# 도구 호출 (프로젝트 목록 조회)
-curl -X POST https://pmagent.vercel.app/invoke \
-  -H "Content-Type: application/json" \
-  -d '{"name": "list_projects", "parameters": {}}'
-
-# 프로젝트 생성
-curl -X POST https://pmagent.vercel.app/invoke \
-  -H "Content-Type: application/json" \
-  -d '{"name": "create_project", "parameters": {"name": "API 테스트 프로젝트", "description": "API로 생성된 테스트 프로젝트"}}'
-```
-
-### 2. MCP 툴박스 수동 추가
-
-MCP 클라이언트에서 다음 정보를 사용하여 서버를 수동으로 추가할 수 있습니다:
-
-```
-서버 이름: pmagent
-표시 이름: PM Agent MCP Server
-설명: 프로젝트 관리를 위한 MCP(Model Context Protocol) 서버
-버전: 0.1.0
-기본 URL: https://pmagent.vercel.app
-```
-
-또는 `smithery-simple.json` 파일을 직접 다운로드하여 클라이언트에 로드할 수 있습니다:
+### 모든 프로젝트 목록 가져오기
 
 ```bash
-# 간소화된 smithery 파일 다운로드
-curl -O https://pmagent.vercel.app/smithery-simple.json
-
-# MCP 클라이언트에서 수동으로 로드
-# 'Add Server > Import from file' 메뉴에서 smithery-simple.json 파일 선택
-```
-
-### 3. JSON-RPC 호출 (고급)
-
-```bash
-# JSON-RPC 초기화
-curl -X POST https://pmagent.vercel.app/ \
+curl -X POST https://pmagent.vercel.app/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize"
+    "method": "list_projects",
+    "params": {},
+    "id": 1
   }'
+```
 
-# JSON-RPC로 도구 목록 조회
-curl -X POST https://pmagent.vercel.app/ \
+### 새 프로젝트 생성하기
+
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
-    "id": 2,
-    "method": "tools/list"
-  }'
-
-# JSON-RPC로 도구 호출 (프로젝트 생성)
-curl -X POST https://pmagent.vercel.app/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 3,
-    "method": "tools/invoke",
+    "method": "create_project",
     "params": {
-      "name": "create_project",
-      "parameters": {
-        "name": "JSON-RPC 테스트 프로젝트",
-        "description": "JSON-RPC로 생성된 테스트 프로젝트"
-      }
-    }
+      "name": "새 프로젝트",
+      "description": "프로젝트 설명"
+    },
+    "id": 1
   }'
 ```
 
-## 스미더리 레지스트리 등록 방법
+### 특정 프로젝트 정보 가져오기
 
-1. 스미더리 CLI 설치:
-   ```
-   npm install -g smithery-cli
-   ```
-
-2. smithery.json 파일로 등록:
-   ```
-   smithery register --file smithery.json
-   ```
-
-## 로컬 개발 환경 설정
-
-1. 저장소 클론:
-   ```
-   git clone https://github.com/contentscoin/pmagent.git
-   cd pmagent-mcp-server
-   ```
-
-2. 의존성 설치:
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. 서버 실행:
-   ```
-   python -m pmagent.server
-   ```
-
-4. 테스트 스크립트 실행:
-   ```
-   python register_mcp.py
-   ```
-
-## 클라이언트 사용 예시
-
-Python:
-
-```python
-from pmagent.agent import PMAgent
-
-async def main():
-    agent = PMAgent(server_url="https://pmagent.vercel.app")
-    
-    # 도구 목록 가져오기
-    tools = await agent.get_tools()
-    print(f"사용 가능한 도구: {tools}")
-    
-    # 프로젝트 생성
-    project = await agent.create_project(
-        name="테스트 프로젝트",
-        description="테스트용 프로젝트입니다."
-    )
-    print(f"생성된 프로젝트: {project}")
-    
-    # 세션 종료
-    await agent.close_session()
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "get_project",
+    "params": {
+      "project_id": "프로젝트_ID"
+    },
+    "id": 1
+  }'
 ```
 
-## 라이선스
+### 프로젝트 업데이트하기
 
-MIT
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "update_project",
+    "params": {
+      "project_id": "프로젝트_ID",
+      "name": "업데이트된 이름",
+      "description": "업데이트된 설명"
+    },
+    "id": 1
+  }'
+```
+
+### 프로젝트 삭제하기
+
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "delete_project",
+    "params": {
+      "project_id": "프로젝트_ID"
+    },
+    "id": 1
+  }'
+```
+
+### 태스크 목록 가져오기
+
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "list_tasks",
+    "params": {
+      "project_id": "프로젝트_ID"
+    },
+    "id": 1
+  }'
+```
+
+### 새 태스크 생성하기
+
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "create_task",
+    "params": {
+      "project_id": "프로젝트_ID",
+      "name": "새 태스크",
+      "description": "태스크 설명",
+      "status": "todo",
+      "due_date": "2023-12-31",
+      "assignee": "담당자"
+    },
+    "id": 1
+  }'
+```
+
+### 특정 태스크 정보 가져오기
+
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "get_task",
+    "params": {
+      "project_id": "프로젝트_ID",
+      "task_id": "태스크_ID"
+    },
+    "id": 1
+  }'
+```
+
+### 태스크 업데이트하기
+
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "update_task",
+    "params": {
+      "project_id": "프로젝트_ID",
+      "task_id": "태스크_ID",
+      "name": "업데이트된 태스크 이름",
+      "description": "업데이트된 태스크 설명",
+      "status": "in_progress",
+      "due_date": "2023-12-31",
+      "assignee": "새 담당자"
+    },
+    "id": 1
+  }'
+```
+
+### 태스크 삭제하기
+
+```bash
+curl -X POST https://pmagent.vercel.app/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "delete_task",
+    "params": {
+      "project_id": "프로젝트_ID",
+      "task_id": "태스크_ID"
+    },
+    "id": 1
+  }'
+```
+
+## 로컬에서 개발하기
+
+### 저장소 클론
+
+```bash
+git clone https://github.com/contentscoin/pmagent.git
+cd pmagent
+```
+
+### 의존성 설치
+
+```bash
+pip install -r requirements.txt
+```
+
+### 서버 실행
+
+```bash
+python -m pmagent.server
+```
+
+기본적으로 서버는 `http://localhost:8081`에서 실행됩니다.
+
+### MCP 레지스트리에 등록하기
+
+```bash
+python register_mcp.py
+```
+
+## 라이센스
+
+MIT 라이센스

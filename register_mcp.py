@@ -167,7 +167,7 @@ def register_with_smithery():
 
 def main():
     """메인 함수"""
-    server_url = os.environ.get("SERVER_URL", "http://localhost:8081")
+    server_url = os.environ.get("SERVER_URL", "http://localhost:8082")
     
     logger.info(f"PMAgent MCP 서버 테스트 시작 (서버 URL: {server_url})")
     

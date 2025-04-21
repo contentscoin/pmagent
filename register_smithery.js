@@ -1,74 +1,54 @@
 #!/usr/bin/env node
 
 /**
- * PMAgent MCP 서버 스미더리 레지스트리 등록 스크립트
- * 
- * 이 스크립트는 PMAgent MCP 서버를 스미더리 레지스트리에 등록합니다.
- * 
- * 사용법:
- * 1. npm install -g smithery-cli
- * 2. node register_smithery.js
+ * PMAgent를 스미더리에 등록하는 스크립트
  */
 
 import fs from 'fs';
-import { exec } from 'child_process';
+import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// __dirname 대응값 생성 (ES 모듈에서는 __dirname이 없음)
+// ES 모듈에서 __dirname 구현
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// smithery.json 파일 경로
-const smitheryJsonPath = path.join(__dirname, 'smithery.json');
+// 스미더리 JSON 파일 위치
+const smitheryJsonPath = path.join(__dirname, 'smithery-simple.json');
 
-// smithery.json 파일 읽기
-function readSmitheryJson() {
-  try {
-    const data = fs.readFileSync(smitheryJsonPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('smithery.json 파일을 읽을 수 없습니다:', error);
-    process.exit(1);
-  }
-}
+// 기존 JSON 파일 읽기
+let smitheryJson = JSON.parse(fs.readFileSync(smitheryJsonPath, 'utf8'));
 
-// 스미더리 레지스트리에 등록
-function registerToSmithery() {
-  const serverInfo = readSmitheryJson();
+// baseUrl 업데이트
+smitheryJson.baseUrl = "https://pmagent.vercel.app";
+
+// 업데이트된 JSON 파일 저장
+fs.writeFileSync(smitheryJsonPath, JSON.stringify(smitheryJson, null, 2), 'utf8');
+
+console.log('스미더리 JSON 파일 업데이트 완료!');
+console.log('새 baseUrl:', smitheryJson.baseUrl);
+
+console.log(`PMAgent 스미더리 등록 시작`);
+console.log(`서버 URL: ${smitheryJson.baseUrl}`);
+console.log(`JSON-RPC 엔드포인트: ${smitheryJson.transport.jsonrpc.endpoint}`);
+
+try {
+  // 스미더리 CLI 사용하여 등록
+  const command = `npx @smithery/cli register --name ${smitheryJson.qualifiedName} --url ${smitheryJson.baseUrl} --version ${smitheryJson.version}`;
   
-  console.log('스미더리 레지스트리에 등록 중...');
-  console.log(`- 서버 이름: ${serverInfo.displayName}`);
-  console.log(`- 서버 버전: ${serverInfo.version}`);
-  console.log(`- 서버 URL: ${serverInfo.baseUrl}`);
+  console.log(`실행 명령: ${command}`);
+  const output = execSync(command, { encoding: 'utf8' });
   
-  // Smithery CLI 명령 실행
-  const command = `smithery register --file "${smitheryJsonPath}"`;
+  console.log('등록 성공:');
+  console.log(output);
   
-  exec(command, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`스미더리 등록 오류: ${error.message}`);
-      return;
-    }
-    
-    if (stderr) {
-      console.error(`스미더리 등록 오류: ${stderr}`);
-      return;
-    }
-    
-    console.log('스미더리 레지스트리 등록 결과:');
-    console.log(stdout);
-    
-    console.log('등록 완료! 이제 다음 명령어로 스미더리에 MCP 서버를 추가할 수 있습니다:');
-    console.log(`mcp_toolbox_add_server qualifiedName="${serverInfo.qualifiedName}"`);
-  });
-}
-
-// 메인 함수
-function main() {
-  console.log('PMAgent MCP 서버 스미더리 레지스트리 등록 시작');
-  registerToSmithery();
-}
-
-// 스크립트 실행
-main(); 
+  // 등록 확인
+  console.log('등록된 서버 목록:');
+  const listOutput = execSync('npx @smithery/cli list', { encoding: 'utf8' });
+  console.log(listOutput);
+  
+} catch (error) {
+  console.error('오류 발생:', error.message);
+  if (error.stdout) console.error('출력:', error.stdout);
+  if (error.stderr) console.error('오류 출력:', error.stderr);
+} 
