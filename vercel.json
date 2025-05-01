@@ -2,12 +2,12 @@
   "version": 2,
   "routes": [
     {
-      "src": "/static/(.*)",
-      "dest": "/public/$1"
-    },
-    {
       "src": "/smithery-simple.json",
       "dest": "/public/smithery-simple.json"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "/public/$1"
     },
     {
       "src": "/",
