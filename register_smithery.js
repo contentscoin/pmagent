@@ -19,16 +19,17 @@ const smitheryJsonPath = path.join(__dirname, 'smithery-simple.json');
 // 기존 JSON 파일 읽기
 let smitheryJson = JSON.parse(fs.readFileSync(smitheryJsonPath, 'utf8'));
 
-// baseUrl 업데이트
-smitheryJson.baseUrl = "https://pmagent-2ba85mpql-jakes-projects-0ab50f91.vercel.app";
+// baseUrl 업데이트 (사용자가 확인한 URL 사용)
+smitheryJson.baseUrl = "https://pmagent.vercel.app/";
 
-// 업데이트된 JSON 파일 저장
+// 업데이트된 JSON 파일 저장 (스크립트 실행 시점에 baseUrl이 맞는지 확인)
 fs.writeFileSync(smitheryJsonPath, JSON.stringify(smitheryJson, null, 2), 'utf8');
 
 console.log('스미더리 JSON 파일 업데이트 완료!');
+console.log('사용될 이름:', smitheryJson.qualifiedName);
 console.log('새 baseUrl:', smitheryJson.baseUrl);
 
-console.log(`PMAgent 스미더리 등록 시작`);
+console.log(`PMAgent 스미더리 등록 시작 (${smitheryJson.qualifiedName})`);
 console.log(`서버 URL: ${smitheryJson.baseUrl}`);
 console.log(`JSON-RPC 엔드포인트: ${smitheryJson.transport.jsonrpc.endpoint}`);
 
@@ -44,6 +45,7 @@ try {
 
 try {
   // 스미더리 CLI 사용하여 등록
+  // qualifiedName을 smithery-simple.json에서 읽어온 값으로 사용
   const command = `npx @smithery/cli register --name ${smitheryJson.qualifiedName} --url ${smitheryJson.baseUrl} --version ${smitheryJson.version} --client cursor`;
   
   console.log(`실행 명령: ${command}`);
