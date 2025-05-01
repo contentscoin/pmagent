@@ -1,37 +1,45 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    }
-  ],
+  // Temporarily remove builds to test static file serving
+  // "builds": [
+  //   {
+  //     "src": "api/index.py",
+  //     "use": "@vercel/python"
+  //   }
+  // ],
   "routes": [
+    // 1. 정적 파일 우선 처리
     {
-      "src": "/static/(.*)",
+      "src": "/static/(.*)", 
       "dest": "/public/$1"
     },
     {
-      "src": "/smithery-simple.json",
-      "dest": "/smithery-simple.json"
+      "src": "/smithery-simple.json", 
+      "dest": "/public/smithery-simple.json" // Explicitly point to file
     },
     {
-      "src": "/api",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api/index.py"
+      "src": "/", // Point root to index.html
+      "dest": "/public/index.html"
     }
-  ],
-  "env": {
-    "DATA_DIR": "./data"
-  },
-  "github": {
-    "enabled": true
-  }
+    // Temporarily remove API routes
+    // {
+    //   "src": "/api", 
+    //   "dest": "/api/index.py"
+    // },
+    // {
+    //   "src": "/", // Root handled above
+    //   "dest": "/api/index.py"
+    // },
+    // {
+    //   "src": "/(.*)", 
+    //   "dest": "/api/index.py" 
+    // }
+  ]
+  // env and github settings can remain
+  // "env": {
+  //   "DATA_DIR": "./data"
+  // },
+  // "github": {
+  //   "enabled": true
+  // }
 } 
