@@ -8,16 +8,16 @@
   ],
   "routes": [
     {
-      "src": "/api",
-      "dest": "/api/index.py"
+      "src": "/static/(.*)",
+      "dest": "/public/$1"
     },
     {
       "src": "/smithery-simple.json",
       "dest": "/smithery-simple.json"
     },
     {
-      "src": "/static/(.*)",
-      "dest": "/public/$1"
+      "src": "/api",
+      "dest": "/api/index.py"
     },
     {
       "src": "/",
