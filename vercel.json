@@ -8,19 +8,7 @@
   ],
   "routes": [
     {
-      "src": "/api/jsonrpc",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/tools",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/invoke",
+      "src": "/api",
       "dest": "/api/index.py"
     },
     {
@@ -30,6 +18,10 @@
     {
       "src": "/static/(.*)",
       "dest": "/public/$1"
+    },
+    {
+      "src": "/",
+      "dest": "/api/index.py"
     },
     {
       "src": "/(.*)",

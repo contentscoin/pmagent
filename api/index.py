@@ -84,22 +84,6 @@ async def api_endpoint(request: Request):
             status_code=500
         )
 
-@app.get("/smithery-simple.json")
-async def get_smithery_simple():
-    logger.info("Smithery 메타데이터 요청 받음")
-    return {
-        "qualifiedName": "pmagent",
-        "displayName": "PM Agent MCP Server",
-        "description": "Project Management MCP Server",
-        "version": "0.1.0",
-        "transport": {
-            "type": "http",
-            "jsonrpc": {
-                "endpoint": "/api"
-            }
-        }
-    }
-
 # Vercel 핸들러는 app 객체 자체여야 합니다.
 # handler = app # 이 줄은 필요 없습니다.
 
