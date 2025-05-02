@@ -1,26 +1,13 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    }
-  ],
   "routes": [
     {
-      "src": "/smithery-simple.json",
-      "dest": "/public/smithery-simple.json"
-    },
-    {
-      "src": "/",
-      "dest": "api/index.py"
-    },
-    {
       "src": "/api",
-      "dest": "api/index.py"
+      "dest": "/api"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
     }
-  ],
-  "github": {
-    "enabled": true
-  }
+  ]
 }

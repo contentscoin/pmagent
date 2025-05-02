@@ -15,11 +15,29 @@ async def root():
     logger.info("루트 경로 요청 받음")
     return {"message": "PM Agent MCP Server is running!"}
 
-@app.post("/api")
+# GET과 POST 요청 모두 처리할 수 있도록 수정
+@app.api_route("/api", methods=["GET", "POST"])
 async def api_endpoint(request: Request):
     request_id = None # id 초기화
     try:
-        logger.info("API 요청 받음")
+        logger.info(f"API 요청 받음 - 메서드: {request.method}")
+        
+        # GET 요청 처리
+        if request.method == "GET":
+            logger.info("GET 요청에 대한 기본 응답 생성")
+            response_data = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "name": "pmagent",
+                    "version": "0.1.0",
+                    "description": "PM Agent MCP Server (Test Description)",
+                    "message": "이 엔드포인트는 JSON-RPC 형식의 POST 요청을 처리합니다."
+                },
+                "id": None
+            }
+            return JSONResponse(content=response_data)
+        
+        # POST 요청 처리
         data = await request.json()
         request_id = data.get("id")
         method = data.get("method", "")
