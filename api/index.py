@@ -17,6 +17,8 @@ app = FastAPI()
 projects = {}
 tasks = {}
 requests = {}
+sessions = {}
+agents = {}
 
 @app.get("/")
 async def root():
@@ -115,6 +117,26 @@ async def api_endpoint(request: Request):
                             "parameters": {
                                 "requestId": {"type": "string"}
                             }
+                        },
+                        {
+                            "name": "create_session",
+                            "description": "Create a new session with a unique ID.",
+                            "parameters": {}
+                        },
+                        {
+                            "name": "export_data",
+                            "description": "Export all session data for client-side storage.",
+                            "parameters": {
+                                "sessionId": {"type": "string", "optional": True}
+                            }
+                        },
+                        {
+                            "name": "import_data",
+                            "description": "Import previously exported data to restore a session.",
+                            "parameters": {
+                                "data": {"type": "object"},
+                                "sessionId": {"type": "string", "optional": True}
+                            }
                         }
                     ]
                 },
@@ -134,6 +156,14 @@ async def api_endpoint(request: Request):
             return await handle_approve_task_completion(params, request_id)
         elif method == "approve_request_completion":
             return await handle_approve_request_completion(params, request_id)
+        
+        # 세션 및 데이터 관리 메서드 처리
+        elif method == "create_session":
+            return await handle_create_session(params, request_id)
+        elif method == "export_data":
+            return await handle_export_data(params, request_id)
+        elif method == "import_data":
+            return await handle_import_data(params, request_id)
         
         # 기본 응답
         logger.warning(f"알 수 없는 메서드 호출: {method}")
@@ -483,6 +513,160 @@ async def handle_approve_request_completion(params, request_id):
             content={
                 "jsonrpc": "2.0",
                 "error": {"code": -32000, "message": f"Error in approve_request_completion: {str(e)}"},
+                "id": request_id
+            },
+            status_code=500
+        )
+
+# 세션 및 데이터 관리 메서드 구현
+async def handle_create_session(params, request_id):
+    try:
+        session_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        
+        # 가벼운 세션 정보만 서버에 보관
+        sessions[session_id] = {
+            "created_at": now,
+            "last_activity": now
+        }
+        
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "sessionId": session_id,
+                "message": "Session created successfully"
+            },
+            "id": request_id
+        }
+        
+        return JSONResponse(content=response)
+    except Exception as e:
+        logger.error(f"create_session 오류: {str(e)}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Error in create_session: {str(e)}"},
+                "id": request_id
+            },
+            status_code=500
+        )
+
+async def handle_export_data(params, request_id):
+    try:
+        session_id = params[0].get("sessionId", None) if params else None
+        
+        # 세션 ID가 제공되었으면 확인
+        if session_id and session_id not in sessions:
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32000, "message": "Session not found"},
+                    "id": request_id
+                },
+                status_code=404
+            )
+        
+        # 세션 ID가 유효하면 해당 세션의 마지막 활동 시간 업데이트
+        if session_id:
+            sessions[session_id]["last_activity"] = datetime.now().isoformat()
+        
+        # 현재 세션의 모든 데이터를 구조화된 형태로 반환
+        exported_data = {
+            "projects": projects,
+            "tasks": tasks,
+            "requests": requests,
+            "agents": agents,
+            "export_time": datetime.now().isoformat(),
+            "session_id": session_id
+        }
+        
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "data": exported_data,
+                "message": "Data exported successfully"
+            },
+            "id": request_id
+        }
+        
+        return JSONResponse(content=response)
+    except Exception as e:
+        logger.error(f"export_data 오류: {str(e)}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Error in export_data: {str(e)}"},
+                "id": request_id
+            },
+            status_code=500
+        )
+
+async def handle_import_data(params, request_id):
+    try:
+        imported_data = params[0].get("data", {})
+        session_id = params[0].get("sessionId", None)
+        
+        # 세션 ID가 제공되었으면 확인
+        if session_id and session_id not in sessions:
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32000, "message": "Session not found"},
+                    "id": request_id
+                },
+                status_code=404
+            )
+        
+        # 기본적인 데이터 구조 확인
+        required_keys = ["projects", "tasks", "requests"]
+        missing_keys = [key for key in required_keys if key not in imported_data]
+        
+        if missing_keys:
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32000, 
+                        "message": f"Invalid data format. Missing keys: {', '.join(missing_keys)}"
+                    },
+                    "id": request_id
+                },
+                status_code=400
+            )
+        
+        # 데이터 적용
+        global projects, tasks, requests, agents
+        projects.update(imported_data["projects"])
+        tasks.update(imported_data["tasks"])
+        requests.update(imported_data["requests"])
+        
+        # 에이전트 데이터가 있으면 적용
+        if "agents" in imported_data:
+            agents.update(imported_data["agents"])
+        
+        # 세션 ID가 유효하면 해당 세션의 마지막 활동 시간 업데이트
+        if session_id:
+            sessions[session_id]["last_activity"] = datetime.now().isoformat()
+        
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "message": "Data imported successfully",
+                "projects_count": len(projects),
+                "tasks_count": len(tasks),
+                "requests_count": len(requests),
+                "agents_count": len(agents)
+            },
+            "id": request_id
+        }
+        
+        return JSONResponse(content=response)
+    except Exception as e:
+        logger.error(f"import_data 오류: {str(e)}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Error in import_data: {str(e)}"},
                 "id": request_id
             },
             status_code=500
