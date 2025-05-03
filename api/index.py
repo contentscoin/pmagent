@@ -137,6 +137,46 @@ async def api_endpoint(request: Request):
                                 "data": {"type": "object"},
                                 "sessionId": {"type": "string", "optional": True}
                             }
+                        },
+                        {
+                            "name": "create_agent",
+                            "description": "Create a new agent of specified type.",
+                            "parameters": {
+                                "type": {"type": "string", "enum": ["pm", "designer", "frontend", "backend", "ai_engineer"]},
+                                "name": {"type": "string"},
+                                "config": {"type": "object", "optional": True}
+                            }
+                        },
+                        {
+                            "name": "get_agent",
+                            "description": "Get information about an agent.",
+                            "parameters": {
+                                "agentId": {"type": "string"}
+                            }
+                        },
+                        {
+                            "name": "list_agents",
+                            "description": "List all available agents.",
+                            "parameters": {
+                                "type": {"type": "string", "optional": True}
+                            }
+                        },
+                        {
+                            "name": "assign_task_to_agent",
+                            "description": "Assign a task to a specific agent.",
+                            "parameters": {
+                                "agentId": {"type": "string"},
+                                "task": {"type": "object"},
+                                "priority": {"type": "string", "enum": ["low", "medium", "high"], "optional": True}
+                            }
+                        },
+                        {
+                            "name": "get_agent_result",
+                            "description": "Get the result of an agent's task.",
+                            "parameters": {
+                                "agentId": {"type": "string"},
+                                "taskId": {"type": "string"}
+                            }
                         }
                     ]
                 },
@@ -164,6 +204,18 @@ async def api_endpoint(request: Request):
             return await handle_export_data(params, request_id)
         elif method == "import_data":
             return await handle_import_data(params, request_id)
+            
+        # 에이전트 관련 메서드 처리
+        elif method == "create_agent":
+            return await handle_create_agent(params, request_id)
+        elif method == "get_agent":
+            return await handle_get_agent(params, request_id)
+        elif method == "list_agents":
+            return await handle_list_agents(params, request_id)
+        elif method == "assign_task_to_agent":
+            return await handle_assign_task_to_agent(params, request_id)
+        elif method == "get_agent_result":
+            return await handle_get_agent_result(params, request_id)
         
         # 기본 응답
         logger.warning(f"알 수 없는 메서드 호출: {method}")
@@ -700,6 +752,314 @@ def generate_progress_table(request_id_str):
         },
         "tasks": tasks_summary
     }
+
+# 에이전트 관련 메서드 구현
+async def handle_create_agent(params, request_id):
+    try:
+        agent_type = params[0].get("type", "")
+        agent_name = params[0].get("name", "")
+        agent_config = params[0].get("config", {})
+        
+        # 에이전트 타입 유효성 검사
+        valid_types = ["pm", "designer", "frontend", "backend", "ai_engineer"]
+        if agent_type not in valid_types:
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32000,
+                        "message": f"Invalid agent type. Must be one of: {', '.join(valid_types)}"
+                    },
+                    "id": request_id
+                },
+                status_code=400
+            )
+        
+        # 새 에이전트 생성
+        agent_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        
+        agent = {
+            "id": agent_id,
+            "type": agent_type,
+            "name": agent_name,
+            "config": agent_config,
+            "status": "idle",
+            "created_at": now,
+            "last_active": now,
+            "tasks": [],
+            "results": {}
+        }
+        
+        # 에이전트 저장
+        agents[agent_id] = agent
+        
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "agentId": agent_id,
+                "message": f"{agent_type.capitalize()} agent '{agent_name}' created successfully"
+            },
+            "id": request_id
+        }
+        
+        return JSONResponse(content=response)
+    except Exception as e:
+        logger.error(f"create_agent 오류: {str(e)}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Error in create_agent: {str(e)}"},
+                "id": request_id
+            },
+            status_code=500
+        )
+
+async def handle_get_agent(params, request_id):
+    try:
+        agent_id = params[0].get("agentId", "")
+        
+        if agent_id not in agents:
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32000, "message": "Agent not found"},
+                    "id": request_id
+                },
+                status_code=404
+            )
+        
+        agent = agents[agent_id]
+        
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "agent": {
+                    "id": agent["id"],
+                    "type": agent["type"],
+                    "name": agent["name"],
+                    "status": agent["status"],
+                    "created_at": agent["created_at"],
+                    "last_active": agent["last_active"],
+                    "task_count": len(agent["tasks"])
+                }
+            },
+            "id": request_id
+        }
+        
+        return JSONResponse(content=response)
+    except Exception as e:
+        logger.error(f"get_agent 오류: {str(e)}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Error in get_agent: {str(e)}"},
+                "id": request_id
+            },
+            status_code=500
+        )
+
+async def handle_list_agents(params, request_id):
+    try:
+        agent_type = params[0].get("type", None) if params else None
+        
+        agent_list = []
+        for agent_id, agent in agents.items():
+            if agent_type is None or agent["type"] == agent_type:
+                agent_list.append({
+                    "id": agent["id"],
+                    "type": agent["type"],
+                    "name": agent["name"],
+                    "status": agent["status"],
+                    "created_at": agent["created_at"]
+                })
+        
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "agents": agent_list,
+                "count": len(agent_list)
+            },
+            "id": request_id
+        }
+        
+        return JSONResponse(content=response)
+    except Exception as e:
+        logger.error(f"list_agents 오류: {str(e)}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Error in list_agents: {str(e)}"},
+                "id": request_id
+            },
+            status_code=500
+        )
+
+async def handle_assign_task_to_agent(params, request_id):
+    try:
+        agent_id = params[0].get("agentId", "")
+        task_data = params[0].get("task", {})
+        priority = params[0].get("priority", "medium")
+        
+        if agent_id not in agents:
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32000, "message": "Agent not found"},
+                    "id": request_id
+                },
+                status_code=404
+            )
+        
+        # 작업 생성
+        task_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        
+        task = {
+            "id": task_id,
+            "agent_id": agent_id,
+            "data": task_data,
+            "priority": priority,
+            "status": "pending",
+            "created_at": now,
+            "started_at": None,
+            "completed_at": None,
+            "result": None
+        }
+        
+        # 에이전트에 작업 할당
+        agents[agent_id]["tasks"].append(task_id)
+        agents[agent_id]["status"] = "assigned"
+        agents[agent_id]["last_active"] = now
+        
+        # 작업 저장
+        if "agent_tasks" not in globals():
+            globals()["agent_tasks"] = {}
+        globals()["agent_tasks"][task_id] = task
+        
+        # 에이전트 타입별 특화 처리
+        agent_type = agents[agent_id]["type"]
+        task_result = None
+        
+        if agent_type == "designer":
+            # 디자이너 에이전트 작업 예시 (실제로는 더 복잡한 로직으로 대체)
+            if "type" in task_data and task_data["type"] == "generate_design":
+                task_result = {
+                    "design_elements": [
+                        {"type": "button", "properties": {"label": task_data.get("label", "Button"), "style": "primary"}}
+                    ],
+                    "status": "generated"
+                }
+        elif agent_type == "frontend":
+            # 프론트엔드 에이전트 작업 예시
+            if "type" in task_data and task_data["type"] == "generate_component":
+                task_result = {
+                    "code": f"// React component for {task_data.get('name', 'Component')}\nfunction {task_data.get('name', 'Component')}() {{\n  return <div>Hello World</div>;\n}}",
+                    "status": "generated"
+                }
+        
+        # 결과가 있으면 즉시 완료 처리
+        if task_result:
+            agents[agent_id]["results"][task_id] = task_result
+            agents[agent_id]["status"] = "idle"
+            task["status"] = "completed"
+            task["completed_at"] = datetime.now().isoformat()
+            task["result"] = task_result
+        
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "taskId": task_id,
+                "agentId": agent_id,
+                "message": f"Task assigned to {agent_type} agent '{agents[agent_id]['name']}'",
+                "status": task["status"]
+            },
+            "id": request_id
+        }
+        
+        # 즉시 처리된 결과가 있으면 포함
+        if task_result:
+            response["result"]["result"] = task_result
+        
+        return JSONResponse(content=response)
+    except Exception as e:
+        logger.error(f"assign_task_to_agent 오류: {str(e)}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Error in assign_task_to_agent: {str(e)}"},
+                "id": request_id
+            },
+            status_code=500
+        )
+
+async def handle_get_agent_result(params, request_id):
+    try:
+        agent_id = params[0].get("agentId", "")
+        task_id = params[0].get("taskId", "")
+        
+        if agent_id not in agents:
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32000, "message": "Agent not found"},
+                    "id": request_id
+                },
+                status_code=404
+            )
+        
+        agent = agents[agent_id]
+        
+        if task_id not in agent["results"]:
+            # 작업이 할당되었지만 아직 결과가 없는 경우
+            if task_id in agent["tasks"]:
+                if "agent_tasks" in globals() and task_id in globals()["agent_tasks"]:
+                    task = globals()["agent_tasks"][task_id]
+                    response = {
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "taskId": task_id,
+                            "agentId": agent_id,
+                            "status": task["status"],
+                            "message": "Task is still processing"
+                        },
+                        "id": request_id
+                    }
+                    return JSONResponse(content=response)
+            
+            return JSONResponse(
+                content={
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32000, "message": "No result found for this task"},
+                    "id": request_id
+                },
+                status_code=404
+            )
+        
+        result = agent["results"][task_id]
+        
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "taskId": task_id,
+                "agentId": agent_id,
+                "result": result,
+                "status": "completed"
+            },
+            "id": request_id
+        }
+        
+        return JSONResponse(content=response)
+    except Exception as e:
+        logger.error(f"get_agent_result 오류: {str(e)}")
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Error in get_agent_result: {str(e)}"},
+                "id": request_id
+            },
+            status_code=500
+        )
 
 # Vercel 핸들러는 app 객체 자체여야 합니다.
 # handler = app # 이 줄은 필요 없습니다.
