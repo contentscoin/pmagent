@@ -1,1 +1,1 @@
-{"jsonrpc":"2.0","result":{"name":"pmagent","version":"0.1.0","description":"PM Agent MCP Server (Test Description)","methods":[{"name":"test_method","description":"A simple test method.","parameters":{}}]},"id":1}
+{"requestId":"d9a6a9ac-1d64-4481-a52a-aefae2b69f27","taskCount":2}

@@ -1,8 +1,21 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+에이전트 팩토리
+
+다양한 유형의 에이전트를 생성하는 팩토리 패턴 구현
+"""
+
 import os
 import json
 import re
 import requests
+import sys
 from typing import Dict, Any, Optional, List, Union, Tuple
+
+# 경로 설정 - 프로젝트 루트 디렉토리 추가
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from .frontend_agent_ollama import FrontendAgentOllama
 from .backend_agent_ollama import BackendAgentOllama

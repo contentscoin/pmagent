@@ -1,0 +1,229 @@
+{
+  "name": "PMAgent MCP Server",
+  "description": "프로젝트 관리를 위한 MCP(Model Context Protocol) 서버",
+  "version": "0.1.0",
+  "models": {
+    "default": {
+      "provider": "jsonrpc",
+      "endpoint": "http://localhost:8082"
+    }
+  },
+  "servers": [
+    {
+      "name": "pmserver",
+      "description": "Project Management Server",
+      "transport": {
+        "type": "jsonrpc",
+        "options": {
+          "endpoint": "http://localhost:8082"
+        }
+      },
+      "specification": {
+        "methods": [
+          {
+            "name": "request_planning",
+            "description": "새 요청을 등록하고 태스크를 계획합니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "originalRequest": {
+                  "type": "string",
+                  "description": "원본 요청 내용"
+                },
+                "tasks": {
+                  "type": "array",
+                  "description": "태스크 목록 (title과 description이 포함된 객체 배열)",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "description": "태스크 제목"
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "태스크 설명"
+                      }
+                    },
+                    "required": ["title"]
+                  }
+                },
+                "splitDetails": {
+                  "type": "string",
+                  "description": "요청 분할 상세 정보 (선택)"
+                }
+              },
+              "required": ["originalRequest", "tasks"]
+            }
+          },
+          {
+            "name": "get_next_task",
+            "description": "다음 대기 중인 태스크(아직 완료되지 않은)를 가져옵니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "description": "요청 ID"
+                }
+              },
+              "required": ["requestId"]
+            }
+          },
+          {
+            "name": "mark_task_done",
+            "description": "태스크를 완료 상태로 표시합니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "description": "요청 ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "태스크 ID"
+                },
+                "completedDetails": {
+                  "type": "string",
+                  "description": "완료 상세 정보 (선택)"
+                }
+              },
+              "required": ["requestId", "taskId"]
+            }
+          },
+          {
+            "name": "approve_task_completion",
+            "description": "완료된 태스크를 승인합니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "description": "요청 ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "태스크 ID"
+                }
+              },
+              "required": ["requestId", "taskId"]
+            }
+          },
+          {
+            "name": "approve_request_completion",
+            "description": "요청 전체의 완료를 승인합니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "description": "요청 ID"
+                }
+              },
+              "required": ["requestId"]
+            }
+          },
+          {
+            "name": "add_tasks_to_request",
+            "description": "기존 요청에 새 태스크를 추가합니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "description": "요청 ID"
+                },
+                "tasks": {
+                  "type": "array",
+                  "description": "추가할 태스크 목록 (title과 description이 포함된 객체 배열)",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "description": "태스크 제목"
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "태스크 설명"
+                      }
+                    },
+                    "required": ["title"]
+                  }
+                }
+              },
+              "required": ["requestId", "tasks"]
+            }
+          },
+          {
+            "name": "update_task",
+            "description": "태스크 정보를 업데이트합니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "description": "요청 ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "태스크 ID"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "새 태스크 제목 (선택)"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "새 태스크 설명 (선택)"
+                }
+              },
+              "required": ["requestId", "taskId"]
+            }
+          },
+          {
+            "name": "delete_task",
+            "description": "태스크를 삭제합니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "description": "요청 ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "태스크 ID"
+                }
+              },
+              "required": ["requestId", "taskId"]
+            }
+          },
+          {
+            "name": "list_requests",
+            "description": "모든 요청 목록을 가져옵니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "name": "open_task_details",
+            "description": "태스크 상세 정보를 가져옵니다.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string",
+                  "description": "태스크 ID"
+                }
+              },
+              "required": ["taskId"]
+            }
+          }
+        ]
+      }
+    }
+  ]
+} 

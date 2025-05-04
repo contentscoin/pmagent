@@ -1,228 +1,117 @@
-# PMAgent MCP 서버
+# PMAgent MCP Server
 
-프로젝트 관리를 위한 MCP(Model Context Protocol) 서버입니다.
+PM Agent MCP(Model Context Protocol) 서버는 프로젝트 관리 및 다양한 AI 에이전트 조정을 위한 JSON-RPC 2.0 기반 서버입니다.
 
-## 개요
+## 주요 기능
 
-PMAgent MCP 서버는 프로젝트와 태스크 관리를 위한 도구를 제공하는 MCP 서버입니다. 이 서버는 MCP 클라이언트가 프로젝트와 태스크를 생성, 조회, 업데이트, 삭제할 수 있도록 API를 제공합니다.
+- 프로젝트 및 태스크 관리
+- 다양한 AI 에이전트 관리 (PM, 디자이너, 프론트엔드, 백엔드, AI 엔지니어)
+- 데이터 지속성 (로컬 파일 저장)
+- Cursor 편집기와의 통합
 
-## 배포 정보
-
-- 서버 주소: https://pmagent.vercel.app
-- 문서: https://github.com/contentscoin/pmagent
-
-## 사용 가능한 도구
-
-PMAgent MCP 서버에서는 다음과 같은 도구들을 사용할 수 있습니다.
-
-- `list_projects`: 모든 프로젝트 목록을 가져옵니다.
-- `create_project`: 새 프로젝트를 생성합니다.
-- `get_project`: 특정 프로젝트의 정보를 가져옵니다.
-- `update_project`: 프로젝트 정보를 업데이트합니다.
-- `delete_project`: 프로젝트를 삭제합니다.
-- `list_tasks`: 특정 프로젝트의 모든 태스크 목록을 가져옵니다.
-- `create_task`: 새 태스크를 생성합니다.
-- `get_task`: 특정 태스크의 정보를 가져옵니다.
-- `update_task`: 태스크 정보를 업데이트합니다.
-- `delete_task`: 태스크를 삭제합니다.
-
-## API 직접 사용하기
-
-PMAgent MCP 서버는 JSON-RPC 2.0 프로토콜을 사용합니다. 다음과 같이 API를 직접 호출할 수 있습니다.
-
-### 모든 프로젝트 목록 가져오기
+## 설치
 
 ```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "list_projects",
-    "params": {},
-    "id": 1
-  }'
-```
+# 저장소 복제
+git clone https://github.com/your-username/pmagent-mcp-server.git
+cd pmagent-mcp-server
 
-### 새 프로젝트 생성하기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "create_project",
-    "params": {
-      "name": "새 프로젝트",
-      "description": "프로젝트 설명"
-    },
-    "id": 1
-  }'
-```
-
-### 특정 프로젝트 정보 가져오기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "get_project",
-    "params": {
-      "project_id": "프로젝트_ID"
-    },
-    "id": 1
-  }'
-```
-
-### 프로젝트 업데이트하기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "update_project",
-    "params": {
-      "project_id": "프로젝트_ID",
-      "name": "업데이트된 이름",
-      "description": "업데이트된 설명"
-    },
-    "id": 1
-  }'
-```
-
-### 프로젝트 삭제하기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "delete_project",
-    "params": {
-      "project_id": "프로젝트_ID"
-    },
-    "id": 1
-  }'
-```
-
-### 태스크 목록 가져오기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "list_tasks",
-    "params": {
-      "project_id": "프로젝트_ID"
-    },
-    "id": 1
-  }'
-```
-
-### 새 태스크 생성하기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "create_task",
-    "params": {
-      "project_id": "프로젝트_ID",
-      "name": "새 태스크",
-      "description": "태스크 설명",
-      "status": "todo",
-      "due_date": "2023-12-31",
-      "assignee": "담당자"
-    },
-    "id": 1
-  }'
-```
-
-### 특정 태스크 정보 가져오기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "get_task",
-    "params": {
-      "project_id": "프로젝트_ID",
-      "task_id": "태스크_ID"
-    },
-    "id": 1
-  }'
-```
-
-### 태스크 업데이트하기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "update_task",
-    "params": {
-      "project_id": "프로젝트_ID",
-      "task_id": "태스크_ID",
-      "name": "업데이트된 태스크 이름",
-      "description": "업데이트된 태스크 설명",
-      "status": "in_progress",
-      "due_date": "2023-12-31",
-      "assignee": "새 담당자"
-    },
-    "id": 1
-  }'
-```
-
-### 태스크 삭제하기
-
-```bash
-curl -X POST https://pmagent.vercel.app/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "delete_task",
-    "params": {
-      "project_id": "프로젝트_ID",
-      "task_id": "태스크_ID"
-    },
-    "id": 1
-  }'
-```
-
-## 로컬에서 개발하기
-
-### 저장소 클론
-
-```bash
-git clone https://github.com/contentscoin/pmagent.git
-cd pmagent
-```
-
-### 의존성 설치
-
-```bash
+# 의존성 설치
 pip install -r requirements.txt
 ```
 
-### 서버 실행
+## 실행
 
 ```bash
-python -m pmagent.server
+# 서버 실행
+python server.py
 ```
 
-기본적으로 서버는 `http://localhost:8081`에서 실행됩니다.
+서버는 기본적으로 `http://localhost:8082`에서 실행됩니다.
 
-### MCP 레지스트리에 등록하기
+## API 엔드포인트
 
-```bash
-python register_mcp.py
-```
+- **메인 API**: `/api` - JSON-RPC 2.0 요청 처리
+- **루트**: `/` - 서버 상태 확인
+
+## 주요 메서드
+
+### 프로젝트 관리
+
+- `request_planning`: 새 요청 등록 및 태스크 계획
+- `get_next_task`: 다음 대기 중인 태스크 가져오기
+- `mark_task_done`: 태스크 완료 처리
+- `approve_task_completion`: 태스크 완료 승인
+- `approve_request_completion`: 전체 요청 완료 승인
+
+### 세션 및 데이터 관리
+
+- `create_session`: 새 세션 생성
+- `export_data`: 세션 데이터 내보내기 (JSON 형식)
+- `import_data`: 데이터 가져오기
+
+### 에이전트 관리
+
+- `create_agent`: 새 에이전트 생성
+- `get_agent`: 에이전트 정보 조회
+- `list_agents`: 에이전트 목록 조회
+- `assign_task_to_agent`: 에이전트에 태스크 할당
+- `get_agent_result`: 에이전트 태스크 결과 조회
+
+## 데이터 지속성
+
+PMAgent MCP 서버는 세션 데이터를 로컬 파일 시스템에 JSON 형식으로 저장합니다.
+
+### 데이터 저장 경로
+
+- 세션 데이터: `api/data/sessions/{session_id}.json`
+
+### 데이터 관리 메서드
+
+- `export_data`: 현재 세션 데이터를 JSON으로 내보내고 파일로 저장
+- `import_data`: 파일에서 데이터 불러오기 (파라미터: "fromFile": true)
+
+자세한 내용은 [데이터 저장소 문서](docs/data_storage.md)를 참조하세요.
+
+## Cursor 통합
+
+PMAgent MCP 서버는 Cursor 편집기와의 통합을 지원합니다. Cursor의 내장 MCP 클라이언트를 통해 서버에 연결하고 다양한 기능을 사용할 수 있습니다.
+
+### 통합 단계
+
+1. PMAgent MCP 서버 실행
+2. Cursor에서 `MCP: Add Server` 명령을 사용하여 서버 등록 (`http://localhost:8082`)
+3. 메서드 호출 및 에이전트 활용
+
+자세한 내용은 [통합 계획 문서](docs/integration_plan.md)를 참조하세요.
+
+## 에이전트 유형
+
+### PM 에이전트
+프로젝트 관리 및 조정을 담당합니다. 요구사항을 분석하고 태스크를 계획합니다.
+
+### 디자이너 에이전트
+UI/UX 디자인을 생성합니다. 컴포넌트, 화면, 테마 등을 디자인합니다.
+
+### 프론트엔드 에이전트
+사용자 인터페이스 구현을 담당합니다. 디자이너의 결과물을 코드로 구현합니다.
+
+### 백엔드 에이전트
+서버 측 로직 및 API를 구현합니다. 데이터베이스 모델 및 비즈니스 로직을 개발합니다.
+
+### AI 엔지니어 에이전트
+AI 기능 및 모델을 통합합니다.
+
+## 문서
+
+- [API 문서](docs/api.md)
+- [에이전트 시스템](docs/agents.md)
+- [데이터 저장소](docs/data_storage.md)
+- [Cursor 통합 계획](docs/integration_plan.md)
+- [CLI 사용법](docs/cli_usage.md)
+- [설치 가이드](docs/INSTALLATION.md)
+- [로드맵](docs/ROADMAP.md)
 
 ## 라이센스
 
-MIT 라이센스
+MIT

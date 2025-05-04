@@ -1,49 +1,78 @@
-MCP 연결 테스트 결과 - 2025-04-18 22:03:41
-==================================================
-MCP 에이전트 헬퍼 초기화 중...
+============================= test session starts ==============================
+platform darwin -- Python 3.9.13, pytest-8.3.5, pluggy-1.5.0 -- /Users/jakeshin/cursor/pplshop/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/jakeshin/cursor/mcp agent ai/pmagent-mcp-server
+configfile: pytest.ini
+plugins: anyio-4.9.0, langsmith-0.3.32, cov-6.1.1
+collecting ... collected 9 items
 
-사용 가능한 MCP:
-- unity_mcp: 사용 가능
-- github_mcp: 사용 가능
-- figma_mcp: 사용 가능
-- db_mcp: 사용 가능
+tests/test_mcp_server.py::TestMCPServer::test_complete_workflow PASSED   [ 11%]
+tests/test_mcp_server.py::TestMCPServer::test_error_handling PASSED      [ 22%]
+tests/test_mcp_server.py::TestMCPServer::test_get_tools PASSED           [ 33%]
+tests/test_mcp_server.py::TestMCPServer::test_invoke_invalid_tool PASSED [ 44%]
+tests/test_mcp_server.py::TestMCPServer::test_invoke_request_planning PASSED [ 55%]
+tests/test_mcp_server.py::TestMCPServer::test_invoke_with_list_params FAILED [ 66%]
+tests/test_mcp_server.py::TestMCPServer::test_jsonrpc_request PASSED     [ 77%]
+tests/test_mcp_server.py::TestMCPServer::test_non_dict_tasks FAILED      [ 88%]
+tests/test_mcp_server.py::TestMCPServer::test_server_root PASSED         [100%]
 
-Figma MCP 설정 파일 확인: figma-mcp-config.json
-설정 내용: {
-  "mcpServers": {
-    "TalkToFigma": {
-      "runtime": {
-        "command": "bunx cursor-talk-to-figma-mcp@latest",
-        "args": [
-          "--server=vps.sonnylab.com"
-        ],
-        "server": "vps.sonnylab.com",
-        "port": 8080,
-        "apiVersion": "1.0.0"
-      }
-    }
-  }
-}
+=================================== FAILURES ===================================
+__________________ TestMCPServer.test_invoke_with_list_params __________________
 
-GitHub MCP 테스트:
-GitHub 커밋 결과: Simulated commit to user/repo/src/components/Button.js: Add Button component...
+self = <test_mcp_server.TestMCPServer testMethod=test_invoke_with_list_params>
 
-Figma MCP 테스트:
-Figma 디자인 데이터: {
-  "name": "Simulated design from https://figma.com/file/https://figma.com/file/example",
-  "components": [
-    "button",
-    "card",
-    "input"
-  ],
-  "colors": [
-    "#3A86FF",
-    "#8338EC",
-    "#FF006E"
-  ]
-}
+    def test_invoke_with_list_params(self):
+        """리스트 형태의 파라미터로 호출 테스트"""
+        # 일부 클라이언트가 리스트 형태로 파라미터를 전달하는 경우
+        payload = {
+            "name": "list_requests",
+            "parameters": []  # 빈 리스트 파라미터
+        }
+    
+        response = self.client.post("/invoke", json=payload)
+>       self.assertEqual(response.status_code, 200)
+E       AssertionError: 422 != 200
 
-데이터베이스 MCP 테스트:
-SQL 쿼리 결과: Simulated SQL execution: SELECT * FROM users LIMIT 10...
+tests/test_mcp_server.py:105: AssertionError
+______________________ TestMCPServer.test_non_dict_tasks _______________________
 
-==================================================
+self = <test_mcp_server.TestMCPServer testMethod=test_non_dict_tasks>
+
+    def test_non_dict_tasks(self):
+        """딕셔너리가 아닌 태스크 처리 테스트"""
+        # 튜플 형태의 태스크를 포함한 요청
+        payload = {
+            "name": "request_planning",
+            "parameters": {
+                "originalRequest": "테스트 요청",
+                "tasks": [
+                    ["태스크 제목", "태스크 설명"]  # 리스트 형태의 태스크
+                ]
+            }
+        }
+    
+        # 이전에 수정한 코드가 리스트를 딕셔너리로 변환할 수 있어야 함
+        response = self.client.post("/invoke", json=payload)
+>       self.assertEqual(response.status_code, 200)
+E       AssertionError: 400 != 200
+
+tests/test_mcp_server.py:223: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    pmagent.mcp_server:mcp_server.py:184 요청 계획 생성 실패: 태스크[0]를 딕셔너리로 변환할 수 없습니다: ['태스크 제목', '태스크 설명']
+================================ tests coverage ================================
+_______________ coverage: platform darwin, python 3.9.13-final-0 _______________
+
+Name                      Stmts   Miss  Cover
+---------------------------------------------
+pmagent/__init__.py           4      0   100%
+pmagent/agent.py            197    197     0%
+pmagent/mcp_server.py       285    144    49%
+pmagent/server.py           289    289     0%
+pmagent/task_manager.py     309    157    49%
+pmagent/test_client.py      108    108     0%
+---------------------------------------------
+TOTAL                      1192    895    25%
+=========================== short test summary info ============================
+FAILED tests/test_mcp_server.py::TestMCPServer::test_invoke_with_list_params - AssertionError: 422 != 200
+FAILED tests/test_mcp_server.py::TestMCPServer::test_non_dict_tasks - AssertionError: 400 != 200
+========================= 2 failed, 7 passed in 0.78s ==========================

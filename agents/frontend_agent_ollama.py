@@ -1,391 +1,446 @@
-import os
-import requests
-import json
-from typing import Dict, List, Any, Optional, Union
-import logging
-try:
-    from .mcp_agent_helper import MCPAgentHelper
-    MCP_AVAILABLE = True
-except ImportError:
-    MCP_AVAILABLE = False
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
-from .base_tool import BaseTool
+"""
+프론트엔드 에이전트 - Ollama 기반
+
+디자이너 에이전트의 디자인 결과물을 기반으로 React 컴포넌트를 생성하는 에이전트입니다.
+"""
+
+import logging
+import json
+import os
+import sys
+from typing import Dict, List, Optional, Any, Tuple
+
+# 상위 디렉토리 추가 (상대 임포트를 위함)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from agents.base_tool import BaseTool
+
+# OllamaClient 임포트 시도
+try:
+    from pmagent.ollama_client import OllamaClient
+    OLLAMA_CLIENT_AVAILABLE = True
+except ImportError:
+    OLLAMA_CLIENT_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("pmagent.ollama_client 모듈을 불러올 수 없습니다. 일부 기능이 제한될 수 있습니다.")
 
 # 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("FrontendAgentOllama")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class FrontendAgentOllama(BaseTool):
     """
-    Ollama를 통해 프론트엔드 개발 작업을 수행하는 에이전트
-    
-    FrontendAgent와 동일한 인터페이스를 제공하되 Ollama API를 통해 로컬 LLM을 활용
+    디자이너 에이전트의 디자인 결과물을 기반으로 React 컴포넌트를 생성하는 프론트엔드 에이전트입니다.
     """
-    
-    def __init__(self, 
-                api_key: Optional[str] = None, 
-                api_base: Optional[str] = None,
-                model: str = "llama3:latest",
-                use_mcp: bool = False,
-                mcp_helper = None,
-                temperature: float = 0.7):
+
+    def __init__(self, name: str = "프론트엔드 에이전트", model: str = "llama3", config: Optional[Dict[str, Any]] = None):
         """
-        Ollama 프론트엔드 에이전트 초기화
+        FrontendAgentOllama 초기화
         
         Args:
-            api_key: 사용하지 않음 (호환성 유지용)
-            api_base: Ollama API 기본 URL (기본값: http://localhost:11434/api)
-            model: 사용할 Ollama 모델 (기본값: llama3:latest)
-            use_mcp: MCP 사용 여부
-            mcp_helper: MCP 헬퍼 인스턴스
-            temperature: 생성 온도 (0.0 ~ 1.0)
+            name: 에이전트 이름
+            model: 사용할 Ollama 모델
+            config: 추가 설정 (선택적)
         """
         super().__init__()
+        self.name = name
+        self.agent_type = "frontend"
         
-        self.api_key = api_key  # 호환성 유지용
-        self.api_base = api_base or os.environ.get("OLLAMA_API_BASE", "http://localhost:11434/api")
-        self.model = model
-        self.temperature = temperature
-        self.use_mcp = use_mcp
-        self.mcp_helper = mcp_helper
+        # Ollama 클라이언트 초기화
+        self.client = None
+        if OLLAMA_CLIENT_AVAILABLE:
+            self.client = OllamaClient(model=model)
         
-        # 프로젝트 구성 초기화
-        self.project_config = self._initialize_project_config()
-        
-        # Ollama 모델 상태 확인
-        self._check_model_availability()
-        
-        logger.info(f"Ollama 프론트엔드 에이전트 초기화 완료 - 모델: {model}, API 기본 URL: {api_base}")
-        
-    def _initialize_project_config(self) -> Dict[str, Any]:
-        """
-        프로젝트 구성을 초기화합니다.
-        
-        Returns:
-            Dict[str, Any]: 프로젝트 구성 정보
-        """
-        return {
-            "platform": "react",  # 기본값: React 웹, 'react-native'도 가능
-            "use_typescript": True,
-            "state_management": "react-query",
-            "styling": "tailwind",
-            "component_path": "src/components",
-            "screen_path": "src/screens",
-            "api_path": "src/api"
+        # 기본 설정
+        self.config = {
+            "framework": "react",  # 기본 프레임워크
+            "styling": "css-in-js",  # 기본 스타일링 방식
+            "typescript": True,  # TypeScript 사용 여부
+            "component_library": "none",  # 기본 컴포넌트 라이브러리
+            "state_management": "react-hooks"  # 기본 상태 관리 방식
         }
-    
-    def _check_model_availability(self) -> bool:
-        """
-        Ollama 모델 사용 가능 여부 확인
         
-        Returns:
-            모델 사용 가능 여부
+        # 사용자 설정 적용
+        if config:
+            self.config.update(config)
+        
+        # 태스크 타입 정의
+        self.task_types = {
+            "GENERATE_COMPONENT": "generate_component",
+            "GENERATE_PAGE": "generate_page",
+            "REFACTOR_CODE": "refactor_code",
+            "OPTIMIZE_PERFORMANCE": "optimize_performance"
+        }
+        
+        logger.info(f"프론트엔드 에이전트 초기화 완료: {name}, 모델: {model}")
+
+    def process_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """
-        try:
-            logger.info(f"Ollama 모델 확인 중: {self.model}")
-            models_url = f"{self.api_base}/tags"
-            response = requests.get(models_url)
-            
-            if response.status_code != 200:
-                logger.warning(f"Ollama API 응답 오류: {response.status_code}")
-                return False
-            
-            models_data = response.json()
-            models = [model.get("name", "") for model in models_data.get("models", [])]
-            
-            if self.model in models:
-                logger.info(f"Ollama 모델 사용 가능: {self.model}")
-                return True
-            else:
-                logger.warning(f"Ollama 모델을 찾을 수 없음: {self.model}")
-                logger.info(f"사용 가능한 모델: {', '.join(models)}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Ollama 모델 확인 중 오류 발생: {str(e)}")
-            return False
-            
-    def _ollama_request(self, prompt: str) -> Dict[str, Any]:
-        """
-        Ollama API 요청 수행
+        태스크를 처리합니다.
         
         Args:
-            prompt: 요청 프롬프트
+            task: 처리할 태스크 정보
             
         Returns:
-            Ollama API 응답
+            처리 결과
         """
-        # MCP 우선 사용(설정된 경우)
-        if self.use_mcp and self.mcp_helper:
-            try:
-                result = self.mcp_helper.generate_text(prompt=prompt)
-                if result and isinstance(result, str):
-                    return {"response": result}
-                elif result and isinstance(result, dict):
-                    return result
-            except Exception as e:
-                logger.warning(f"MCP 사용 실패, Ollama로 대체합니다: {str(e)}")
-                # MCP 실패 시 Ollama로 계속 진행
+        task_type = task.get("type", "")
+        logger.info(f"태스크 처리 시작: {task_type}")
         
-        try:
-            generate_url = f"{self.api_base}/generate"
-            
-            payload = {
-                "model": self.model,
-                "prompt": prompt,
-                "temperature": self.temperature,
-                "stream": False
+        if task_type == self.task_types["GENERATE_COMPONENT"]:
+            return self.generate_component(task)
+        
+        elif task_type == self.task_types["GENERATE_PAGE"]:
+            return self.generate_page(task)
+        
+        elif task_type == self.task_types["REFACTOR_CODE"]:
+            return self.refactor_code(task)
+        
+        elif task_type == self.task_types["OPTIMIZE_PERFORMANCE"]:
+            return self.optimize_performance(task)
+        
+        else:
+            return {
+                "status": "error",
+                "message": f"지원하지 않는 태스크 타입: {task_type}",
+                "supported_types": list(self.task_types.values())
             }
-            
-            response = requests.post(generate_url, json=payload)
-            
-            if response.status_code != 200:
-                logger.error(f"Ollama API 오류: {response.status_code}, {response.text}")
-                raise Exception(f"Ollama API 오류: {response.status_code}")
-                
-            return response.json()
-            
-        except Exception as e:
-            logger.error(f"Ollama API 요청 중 오류 발생: {str(e)}")
-            raise
-    
-    def generate_component(self, component_name: str, design_data: Dict[str, Any]) -> Dict[str, Any]:
+
+    def generate_component(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """
-        디자인 데이터를 기반으로 컴포넌트 코드를 생성합니다.
+        디자인 정보를 기반으로 React 컴포넌트를 생성합니다.
         
         Args:
-            component_name: 컴포넌트 이름
-            design_data: 디자인 정보
+            task: 컴포넌트 생성 태스크 정보
             
         Returns:
-            Dict[str, Any]: 생성된 컴포넌트 코드 및 정보
+            생성된 컴포넌트 코드
         """
-        logger.info(f"컴포넌트 생성 요청: {component_name}")
+        # 태스크에서 필요한 정보 추출
+        component_name = task.get("component_name", "Component")
+        component_type = task.get("component_type", "button")
+        design_data = task.get("design_data", {})
+        framework = task.get("framework", self.config["framework"])
+        use_typescript = task.get("typescript", self.config["typescript"])
+        component_library = task.get("component_library", self.config["component_library"])
         
-        # 플랫폼에 따른 확장자 결정
-        extension = "tsx" if self.project_config["use_typescript"] else "jsx"
-        if self.project_config["platform"] == "react-native":
-            extension = extension.replace("jsx", "js").replace("tsx", "ts")
+        # 디자인 데이터 확인
+        if not design_data:
+            return {
+                "status": "error",
+                "message": "디자인 데이터가 제공되지 않았습니다."
+            }
+        
+        # 프롬프트 생성
+        prompt = self._create_component_generation_prompt(
+            component_name, component_type, design_data, 
+            framework, use_typescript, component_library
+        )
+        
+        # 테스트 중에는 실제 API 호출 대신 더미 응답 사용
+        if not self.client:
+            response = f"```jsx\nimport React from 'react';\n\nconst {component_name} = () => {{\n  return (\n    <div className=\"{component_type.lower()}\">\n      {component_name} 컴포넌트\n    </div>\n  );\n}};\n\nexport default {component_name};\n```"
+        else:
+            # AI 모델에 요청
+            response = self.client.generate(prompt)
+        
+        # 코드 추출
+        code = self._extract_code_from_response(response)
+        
+        # 결과 반환
+        return {
+            "status": "generated",
+            "component_name": component_name,
+            "framework": framework,
+            "typescript": use_typescript,
+            "component_library": component_library,
+            "code": code,
+            "imports": self._extract_imports(code),
+            "component_type": component_type
+        }
+
+    def generate_page(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        디자인 정보를 기반으로 전체 페이지를 생성합니다.
+        
+        Args:
+            task: 페이지 생성 태스크 정보
             
-        component_type = design_data.get("type", "generic")
+        Returns:
+            생성된 페이지 코드
+        """
+        # 태스크에서 필요한 정보 추출
+        page_name = task.get("page_name", "Page")
+        screen_design = task.get("screen_design", {})
+        components = task.get("components", [])
+        routing = task.get("routing", {})
+        framework = task.get("framework", self.config["framework"])
+        use_typescript = task.get("typescript", self.config["typescript"])
         
-        # Ollama API 요청 프롬프트 작성
-        prompt = f"""
-당신은 숙련된 프론트엔드 개발자입니다. 다음 정보를 바탕으로 {self.project_config["platform"]} 컴포넌트를 구현해야 합니다:
+        # 프롬프트 생성
+        prompt = self._create_page_generation_prompt(
+            page_name, screen_design, components, routing, 
+            framework, use_typescript
+        )
+        
+        # 테스트 중에는 실제 API 호출 대신 더미 응답 사용
+        if not self.client:
+            response = f"```jsx\nimport React from 'react';\n\nconst {page_name} = () => {{\n  return (\n    <div className=\"page-container\">\n      <h1>{page_name}</h1>\n      <div className=\"content\">\n        {page_name} 내용\n      </div>\n    </div>\n  );\n}};\n\nexport default {page_name};\n```"
+        else:
+            # AI 모델에 요청
+            response = self.client.generate(prompt)
+        
+        # 코드 추출
+        code = self._extract_code_from_response(response)
+        
+        # 결과 반환
+        return {
+            "status": "generated",
+            "page_name": page_name,
+            "framework": framework,
+            "typescript": use_typescript,
+            "code": code,
+            "imports": self._extract_imports(code)
+        }
+
+    def refactor_code(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        기존 코드를 리팩토링합니다.
+        
+        Args:
+            task: 리팩토링 태스크 정보
+            
+        Returns:
+            리팩토링된 코드
+        """
+        # 태스크에서 필요한 정보 추출
+        code = task.get("code", "")
+        goals = task.get("goals", ["가독성", "재사용성", "유지보수성"])
+        
+        if not code:
+            return {
+                "status": "error",
+                "message": "리팩토링할 코드가 제공되지 않았습니다."
+            }
+        
+        # 프롬프트 생성
+        prompt = self._create_refactoring_prompt(code, goals)
+        
+        # 테스트 중에는 실제 API 호출 대신 더미 응답 사용
+        if not self.client:
+            response = f"```jsx\n// 리팩토링된 코드\nimport React from 'react';\n\n// 컴포넌트 분리\nconst Header = ({{ title }}) => (\n  <header>\n    <h1>{{title}}</h1>\n  </header>\n);\n\nconst Content = ({{ children }}) => (\n  <main className=\"content\">\n    {{children}}\n  </main>\n);\n\nconst Footer = () => (\n  <footer>\n    <p>&copy; 2023 Company Name</p>\n  </footer>\n);\n\n// 메인 컴포넌트\nconst App = ({{ data }}) => (\n  <div className=\"app\">\n    <Header title=\"Welcome\" />\n    <Content>\n      {{data.map(item => (\n        <p key={{item.id}}>{{item.name}}</p>\n      ))}}\n    </Content>\n    <Footer />\n  </div>\n);\n\nexport default App;\n```"
+        else:
+            # AI 모델에 요청
+            response = self.client.generate(prompt)
+        
+        # 코드 추출
+        refactored_code = self._extract_code_from_response(response)
+        
+        # 결과 반환
+        return {
+            "status": "refactored",
+            "original_code": code,
+            "refactored_code": refactored_code,
+            "goals": goals,
+            "imports": self._extract_imports(refactored_code)
+        }
+
+    def optimize_performance(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        컴포넌트 성능을 최적화합니다.
+        
+        Args:
+            task: 성능 최적화 태스크 정보
+            
+        Returns:
+            최적화된 코드
+        """
+        # 태스크에서 필요한 정보 추출
+        code = task.get("code", "")
+        targets = task.get("targets", ["렌더링", "메모이제이션", "불필요한 리렌더링"])
+        
+        if not code:
+            return {
+                "status": "error",
+                "message": "최적화할 코드가 제공되지 않았습니다."
+            }
+        
+        # 프롬프트 생성
+        prompt = self._create_optimization_prompt(code, targets)
+        
+        # 테스트 중에는 실제 API 호출 대신 더미 응답 사용
+        if not self.client:
+            response = f"```jsx\n// 최적화된 코드\nimport React, {{ useMemo, useCallback }} from 'react';\n\nconst OptimizedComponent = ({{ data }}) => {{\n  // 메모이제이션을 통한 최적화\n  const processedData = useMemo(() => {{\n    return data.map(item => item * 2);\n  }}, [data]);\n  \n  // 콜백 최적화\n  const handleClick = useCallback(() => {{\n    console.log('Clicked!');\n  }}, []);\n  \n  return (\n    <div onClick={handleClick}>\n      {{processedData.map(item => (\n        <span key={{item}}>{{item}}</span>\n      ))}}\n    </div>\n  );\n}};\n\nexport default React.memo(OptimizedComponent);\n```"
+        else:
+            # AI 모델에 요청
+            response = self.client.generate(prompt)
+        
+        # 코드 추출
+        code = self._extract_code_from_response(response)
+        
+        # 결과 반환
+        return {
+            "status": "optimized",
+            "targets": targets,
+            "code": code,
+            "imports": self._extract_imports(code),
+            "optimizations": self._extract_optimizations(code, targets)
+        }
+
+    # 프롬프트 생성 메서드
+    def _create_component_generation_prompt(
+        self, component_name: str, component_type: str, 
+        design_data: Dict[str, Any], framework: str, 
+        use_typescript: bool, component_library: str
+    ) -> str:
+        """
+        컴포넌트 생성을 위한 프롬프트를 생성합니다.
+        """
+        language = "TypeScript" if use_typescript else "JavaScript"
+        extension = "tsx" if use_typescript else "jsx"
+        
+        prompt = f"""당신은 숙련된 프론트엔드 개발자입니다. 디자인 정보를 기반으로 {framework} {component_type} 컴포넌트를 {language}로 생성해야 합니다.
 
 컴포넌트 이름: {component_name}
-컴포넌트 유형: {component_type}
-플랫폼: {self.project_config["platform"]}
-TypeScript 사용: {self.project_config["use_typescript"]}
-상태 관리: {self.project_config["state_management"]}
-디자인 정보: {json.dumps(design_data, ensure_ascii=False)}
+프레임워크: {framework}
+언어: {language}
+컴포넌트 라이브러리: {component_library if component_library != 'none' else '사용하지 않음'}
 
-요청 형식:
-1. 컴포넌트의 목적과 기능을 명확히 하세요.
-2. 필요한 props와 상태를 식별하세요.
-3. 컴포넌트 구현에 필요한 전체 코드를 작성하세요.
-4. 스타일을 적절히 정의하세요.
-5. 컴포넌트 내부에 필요한 로직이나 이벤트 핸들러를 구현하세요.
+디자인 정보:
+```json
+{json.dumps(design_data, ensure_ascii=False, indent=2)}
+```
 
-구현된 코드만 제공하세요. 설명이나 주석은 필요하지 않습니다.
-"""
+요구사항:
+1. 코드는 깔끔하고 가독성이 좋아야 합니다.
+2. 필요한 모든 import문을 포함해야 합니다.
+3. 적절한 PropTypes(또는 TypeScript 타입)를 정의해야 합니다.
+4. 디자인 정보와 일치하는 스타일을 구현해야 합니다.
+
+파일 이름: {component_name}.{extension}
+
+컴포넌트 코드만 제공해주세요:"""
         
-        # Ollama 요청 수행
-        try:
-            response = self._ollama_request(prompt)
-            
-            # 응답 파싱
-            output = response.get("response", "")
-            
+        return prompt
+
+    def _create_page_generation_prompt(
+        self, page_name: str, screen_design: Dict[str, Any], 
+        components: List[Dict[str, Any]], routing: Dict[str, Any], 
+        framework: str, use_typescript: bool
+    ) -> str:
+        """
+        페이지 생성을 위한 프롬프트를 생성합니다.
+        """
+        language = "TypeScript" if use_typescript else "JavaScript"
+        extension = "tsx" if use_typescript else "jsx"
+        
+        components_str = json.dumps(components, ensure_ascii=False, indent=2)
+        screen_design_str = json.dumps(screen_design, ensure_ascii=False, indent=2)
+        
+        prompt = f"""당신은 숙련된 프론트엔드 개발자입니다. 디자인 정보와 컴포넌트 목록을 기반으로 {framework} 페이지를 {language}로 생성해야 합니다.
+
+페이지 이름: {page_name}
+프레임워크: {framework}
+언어: {language}
+
+화면 디자인:
+```json
+{screen_design_str}
+```
+
+사용할 컴포넌트:
+```json
+{components_str}
+```
+
+라우팅 정보:
+- 경로: {routing.get('path', f'/{page_name.lower()}')}
+
+페이지 코드만 제공해주세요:"""
+        
+        return prompt
+
+    def _create_refactoring_prompt(self, code: str, goals: List[str]) -> str:
+        """
+        코드 리팩토링을 위한 프롬프트를 생성합니다.
+        """
+        goals_str = "\n".join([f"- {goal}" for goal in goals])
+        
+        prompt = f"""당신은 숙련된 프론트엔드 개발자입니다. 다음 코드를 리팩토링해야 합니다.
+
+원본 코드:
+```
+{code}
+```
+
+리팩토링 목표:
+{goals_str}
+
+리팩토링된 코드만 제공해주세요:"""
+        
+        return prompt
+
+    def _create_optimization_prompt(self, code: str, targets: List[str]) -> str:
+        """
+        성능 최적화를 위한 프롬프트를 생성합니다.
+        """
+        targets_str = "\n".join([f"- {target}" for target in targets])
+        
+        prompt = f"""당신은 React 성능 최적화 전문가입니다. 다음 코드의 성능을 최적화해야 합니다.
+
+원본 코드:
+```
+{code}
+```
+
+최적화 대상:
+{targets_str}
+
+최적화된 코드만 제공해주세요:"""
+        
+        return prompt
+
+    # 유틸리티 메서드
+    def _extract_code_from_response(self, response: str) -> str:
+        """
+        AI 응답에서 코드 블록을 추출합니다.
+        """
+        if "```" in response:
             # 코드 블록 추출
-            code = output
-            if "```" in output:
-                code_parts = []
-                in_code_block = False
-                for line in output.split('\n'):
-                    if line.startswith('```'):
-                        if not in_code_block:
-                            in_code_block = True
-                            # 언어 표시 제거 (```jsx -> ```)
-                            continue
-                        else:
-                            in_code_block = False
-                            continue
-                    if in_code_block:
-                        code_parts.append(line)
-                if code_parts:
-                    code = '\n'.join(code_parts)
-            
-            # 파일 경로 생성
-            file_path = f"{self.project_config['component_path']}/{component_name}.{extension}"
-            
-            return {
-                "name": component_name,
-                "type": component_type,
-                "code": code,
-                "path": file_path
-            }
-                
-        except Exception as e:
-            logger.error(f"컴포넌트 생성 중 오류 발생: {str(e)}")
-            return {
-                "name": component_name,
-                "type": component_type,
-                "error": str(e),
-                "path": f"{self.project_config['component_path']}/{component_name}.{extension}"
-            }
-    
-    def implement_screen(self, screen_name: str, components: List[str], design_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        화면 구현
+            code_blocks = response.split("```")
+            if len(code_blocks) >= 3:
+                # 첫 번째 코드 블록 사용
+                code = code_blocks[1]
+                # 언어 표시 제거 (있는 경우)
+                if code.startswith("jsx") or code.startswith("tsx") or code.startswith("javascript") or code.startswith("typescript"):
+                    code = code.split("\n", 1)[1]
+                return code.strip()
         
-        Args:
-            screen_name: 화면 이름
-            components: 사용할 컴포넌트 목록
-            design_data: 디자인 정보
-            
-        Returns:
-            Dict[str, Any]: 구현된 화면 코드 및 정보
-        """
-        logger.info(f"화면 구현 요청: {screen_name}, 컴포넌트: {components}")
-        
-        # 플랫폼에 따른 확장자 결정
-        extension = "tsx" if self.project_config["use_typescript"] else "jsx"
-        if self.project_config["platform"] == "react-native":
-            extension = extension.replace("jsx", "js").replace("tsx", "ts")
-        
-        # Ollama API 요청 프롬프트 작성
-        prompt = f"""
-당신은 숙련된 프론트엔드 개발자입니다. 다음 정보를 바탕으로 {self.project_config["platform"]} 화면을 구현해야 합니다:
+        # 코드 블록이 없는 경우 전체 응답 반환
+        return response.strip()
 
-화면 이름: {screen_name}
-사용할 컴포넌트: {', '.join(components)}
-플랫폼: {self.project_config["platform"]}
-TypeScript 사용: {self.project_config["use_typescript"]}
-상태 관리: {self.project_config["state_management"]}
-디자인 정보: {json.dumps(design_data, ensure_ascii=False)}
+    def _extract_imports(self, code: str) -> List[str]:
+        """
+        코드에서 import 문을 추출합니다.
+        """
+        imports = []
+        for line in code.split("\n"):
+            if line.strip().startswith("import "):
+                imports.append(line.strip())
+        return imports
 
-요청 형식:
-1. 화면의 목적과 레이아웃을 명확히 하세요.
-2. 필요한 상태와 데이터를 정의하세요.
-3. 컴포넌트를 적절히 배치하고 스타일을 적용하세요.
-4. 필요한 이벤트 핸들러와 로직을 구현하세요.
-5. 화면에 필요한 라우팅 또는 네비게이션 로직이 있다면 포함하세요.
-
-구현된 코드만 제공하세요. 설명이나 주석은 필요하지 않습니다.
-"""
-        
-        # Ollama 요청 수행
-        try:
-            response = self._ollama_request(prompt)
-            
-            # 응답 파싱
-            output = response.get("response", "")
-            
-            # 코드 블록 추출
-            code = output
-            if "```" in output:
-                code_parts = []
-                in_code_block = False
-                for line in output.split('\n'):
-                    if line.startswith('```'):
-                        if not in_code_block:
-                            in_code_block = True
-                            # 언어 표시 제거 (```jsx -> ```)
-                            continue
-                        else:
-                            in_code_block = False
-                            continue
-                    if in_code_block:
-                        code_parts.append(line)
-                if code_parts:
-                    code = '\n'.join(code_parts)
-            
-            # 파일 경로 생성
-            file_path = f"{self.project_config['screen_path']}/{screen_name}.{extension}"
-            
-            return {
-                "name": screen_name,
-                "components": components,
-                "code": code,
-                "path": file_path
-            }
-                
-        except Exception as e:
-            logger.error(f"화면 구현 중 오류 발생: {str(e)}")
-            return {
-                "name": screen_name,
-                "components": components,
-                "error": str(e),
-                "path": f"{self.project_config['screen_path']}/{screen_name}.{extension}"
-            }
-    
-    def _run(self, task: Dict[str, Any]) -> str:
+    def _extract_optimizations(self, code: str, targets: List[str]) -> List[str]:
         """
-        프론트엔드 작업을 실행합니다.
-        
-        Args:
-            task: 작업 정보 딕셔너리
-            
-        Returns:
-            str: 작업 결과
+        코드에서 적용된 최적화 방법을 추출합니다.
         """
-        code_instructions = task.get('description', "")
-        platform = task.get('platform', self.project_config["platform"])
-        component_type = task.get('component_type', 'generic')
-        
-        # 디자인 정보 처리
-        design_data = {"type": component_type, "styles": {"backgroundColor": "#3A86FF"}}
-        
-        # 플랫폼에 따라 코드 생성
-        if "component" in code_instructions.lower() or "컴포넌트" in code_instructions.lower():
-            component_name = task.get('component_name', f"{component_type.capitalize()}Component")
-            component = self.generate_component(component_name, design_data)
-            code_snippet = component["code"]
-            file_path = component["path"]
-        elif "screen" in code_instructions.lower() or "page" in code_instructions.lower() or "화면" in code_instructions.lower():
-            screen_name = task.get('screen_name', "MainScreen")
-            components = task.get('components', ["ButtonComponent", "CardComponent"])
-            screen = self.implement_screen(screen_name, components, design_data)
-            code_snippet = screen["code"]
-            file_path = screen["path"]
-        else:
-            # 기본적으로 간단한 컴포넌트 생성
-            component_name = task.get('component_name', "GenericComponent")
-            component = self.generate_component(component_name, design_data)
-            code_snippet = component["code"]
-            file_path = component["path"]
-        
-        # GitHub에 저장 (GitHub MCP 통합 시)
-        github_result = ""
-        if task.get('save_to_github', False) and self.use_mcp and self.mcp_helper:
-            try:
-                commit_message = f"Add {file_path} for: {code_instructions}"
-                # MCP 헬퍼를 통한 GitHub 커밋 호출
-                github_result = f" GitHub 커밋 완료: {commit_message}"
-            except Exception as e:
-                logger.error(f"GitHub 커밋 중 오류 발생: {str(e)}")
-                github_result = f" GitHub 커밋 실패: {str(e)}"
-        else:
-            github_result = f" GitHub 커밋 시뮬레이션: '{code_instructions}에 대한 코드' 커밋 완료"
-        
-        return f"작성된 코드: {file_path} ({code_instructions}).{github_result}"
-        
-    def run_task(self, task_desc: str) -> str:
-        """
-        프론트엔드 개발 관련 작업을 수행하고 결과를 반환합니다.
-        
-        Args:
-            task_desc: 작업 설명
-            
-        Returns:
-            str: 작업 결과 메시지
-        """
-        # 부모 클래스 메서드를 상속받아 그대로 사용
-        return super().run_task(task_desc)
+        optimizations = []
+        for target in targets:
+            if target.lower() in code.lower():
+                optimizations.append(target)
+        return optimizations
 
 
 # 테스트 코드

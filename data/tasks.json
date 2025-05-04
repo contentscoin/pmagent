@@ -1,24 +1,9 @@
-[
-  {
-    "id": "e76eb9c2-9536-4cba-bf1c-ff4d9f32d421",
-    "project_id": "8efa7281-081f-4919-b39c-96c2280923ba",
-    "name": "테스트 태스크",
-    "description": "이 태스크는 PMAgent MCP 서버 테스트용입니다.",
-    "status": "TODO",
-    "due_date": null,
-    "assignee": "테스터",
-    "created_at": "2025-04-20T12:04:30.632164",
-    "updated_at": "2025-04-20T12:04:30.632164"
-  },
-  {
-    "id": "a86ab74e-e75c-4ef5-84c8-b1e1d41c913b",
-    "project_id": "09b3db4c-b11f-463d-866c-e2775c198b8a",
-    "name": "��� ���������",
-    "description": "������ ��������� ��������������� ���������",
-    "status": "IN_PROGRESS",
-    "due_date": null,
-    "assignee": "���������",
-    "created_at": "2025-04-20T17:30:46.144110",
-    "updated_at": "2025-04-20T17:30:46.144110"
+{
+  "task-1": {
+    "id": "task-1",
+    "requestId": "req-1",
+    "title": "테스트 태스크",
+    "description": "태스크 설명",
+    "status": "PENDING"
   }
-]
+}
