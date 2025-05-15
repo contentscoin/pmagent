@@ -113,27 +113,42 @@ def main():
     """서버 실행 메인 함수"""
     parser = argparse.ArgumentParser(description="PMAgent MCP 서버 실행")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="호스트 주소 (기본값: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=8083, help="포트 번호 (기본값: 8083)")
+    # Koyeb PORT 환경 변수를 우선적으로 사용하도록 포트 인자 처리 수정
+    default_port = int(os.environ.get("PORT", 8080)) # Koyeb 기본 포트는 8080일 수 있음
+    parser.add_argument("--port", type=int, default=default_port, help=f"포트 번호 (기본값: {default_port} 또는 PORT 환경 변수)")
     parser.add_argument("--data-dir", type=str, help="데이터 디렉토리 경로")
     
     args = parser.parse_args()
     
+    # 최종 사용할 호스트 및 포트 결정
+    # 명령줄 인수가 환경 변수보다 우선순위가 높도록 하려면 아래와 같이 조정 가능
+    # 하지만 Koyeb에서는 환경 변수가 우선되어야 하므로, args.port는 기본값으로만 사용
+    host_to_use = args.host
+    port_to_use = args.port # 기본적으로 parser에서 PORT 환경 변수를 이미 반영했거나 기본값을 가짐
+    
+    # 만약 명령줄 인수로 포트가 명시적으로 주어졌다면, 그 값을 사용 (PORT 환경변수보다 우선)
+    # 이렇게 하려면 parser의 default를 수정하는 대신, 여기서 args를 직접 확인해야 함
+    # 여기서는 Koyeb의 PORT 환경변수를 더 우선시하는 현재 로직을 유지합니다.
+    # (argparse가 이미 PORT 환경변수를 default로 사용하도록 위에서 수정했으므로 port_to_use는 args.port 그대로 사용)
+
     # 환경 변수 설정
     if args.data_dir:
         os.environ["DATA_DIR"] = args.data_dir
 
-    # 서버 시작 전 포트 확인 및 프로세스 정리
-    # logger.info(f"포트 {args.port} 사용 가능 여부 확인 중...")
-    # check_and_kill_process_on_port(args.host, args.port)
+    # 서버 시작 전 포트 확인 및 프로세스 정리 (Koyeb 환경에서는 주석 처리 유지)
+    # if os.environ.get("KOYEB_APP_NAME") is None: # 로컬 환경에서만 실행하도록 조건 추가 가능
+    #    logger.info(f"로컬 환경에서 포트 {port_to_use} 사용 가능 여부 확인 중...")
+    #    check_and_kill_process_on_port(host_to_use, port_to_use)
     
     # 서버 시작
     try:
-        logger.info(f"PMAgent MCP 서버를 시작합니다 (http://{args.host}:{args.port})")
-        uvicorn.run(start_server, host=args.host, port=args.port)
+        logger.info(f"PMAgent MCP 서버를 시작합니다 (http://{host_to_use}:{port_to_use})")
+        # uvicorn.run() 호출 시 애플리케이션 객체 대신 임포트 문자열 사용
+        uvicorn.run("pmagent.mcp_server:app", host=host_to_use, port=port_to_use, reload=False)
     except KeyboardInterrupt:
         logger.info("서버가 종료되었습니다.")
-    except Exception as e:
-        logger.error(f"서버 실행 중 오류 발생: {str(e)}")
+    except Exception: # 모든 예외를 포괄적으로 잡음
+        logger.exception("서버 실행 중 상세 오류 발생:") # 스택 트레이스 포함 로깅
         sys.exit(1)
 
 if __name__ == "__main__":
