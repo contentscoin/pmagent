@@ -12,12 +12,17 @@ import os
 import sys
 import argparse
 import logging
+import socket
+import psutil # psutil 임포트
 from dotenv import load_dotenv
 
 # 환경 변수 로드
 load_dotenv()
 
-from pmagent import start_server
+# 프로젝트 루트 경로 추가
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from pmagent.mcp_server import start_server
 
 # 로깅 설정
 logging.basicConfig(
@@ -30,11 +35,84 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def check_and_kill_process_on_port(host: str, port: int):
+    """지정된 호스트와 포트를 사용하는 프로세스를 확인하고, 필요시 종료합니다. (net_connections 사용)"""
+    processes_found_on_port = {}
+
+    try:
+        # 시스템 전체의 인터넷 연결 목록을 가져옴 (net_connections 사용)
+        all_conns = psutil.net_connections(kind='inet')
+    except psutil.AccessDenied:
+        logger.warning("네트워크 연결 정보를 가져오는 데 필요한 권한이 없습니다. 포트 확인을 건너뜁니다.")
+        return
+    except Exception as e:
+        logger.error(f"net_connections 호출 중 오류 발생: {e}")
+        return
+
+    for conn in all_conns:
+        # laddr (local address)의 포트가 일치하고, 상태가 LISTEN인지 확인
+        # conn.laddr이 None이 아닌지 먼저 확인 (일부 연결 유형에 없을 수 있음)
+        if conn.laddr and conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
+            # host가 '0.0.0.0'이면 모든 IP에서의 리슨을 고려
+            is_correct_host = (conn.laddr.ip == host) or \
+                              (host == '0.0.0.0' and conn.laddr.ip in ['0.0.0.0', '127.0.0.1', '::']) or \
+                              (host == '127.0.0.1' and conn.laddr.ip == '0.0.0.0') # 0.0.0.0 리슨은 localhost 요청도 받음
+            
+            if is_correct_host and conn.pid is not None:
+                # 이미 처리한 PID인지 확인
+                if conn.pid in processes_found_on_port:
+                    continue
+                
+                try:
+                    proc = psutil.Process(conn.pid)
+                    # 프로세스 정보를 딕셔너리에 저장 (PID를 키로 사용)
+                    processes_found_on_port[conn.pid] = proc 
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    logger.debug(f"PID {conn.pid}에 대한 프로세스 정보를 얻을 수 없습니다.")
+                    continue
+
+    if processes_found_on_port:
+        logger.warning(f"포트 {port}가 이미 사용 중입니다.")
+        # values() 대신 items()를 사용하여 pid와 proc 객체를 함께 얻음
+        for pid, proc in processes_found_on_port.items():
+            try:
+                proc_name = proc.name()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                proc_name = "(이름 확인 불가)"
+                
+            proc_info_str = f"PID: {pid}, Name: {proc_name}"
+            logger.info(f"포트 {port}를 사용 중인 프로세스: {proc_info_str}")
+            try:
+                user_input = input(f"  프로세스 {proc_info_str}를 종료하시겠습니까? (y/n): ").lower().strip()
+                if user_input == 'y':
+                    logger.info(f"  프로세스 {pid} 종료 시도...")
+                    proc.terminate() # 먼저 정상 종료 시도
+                    try:
+                        proc.wait(timeout=3) # 종료 대기
+                        logger.info(f"  프로세스 {pid}가 성공적으로 terminate 되었습니다.")
+                    except psutil.TimeoutExpired:
+                        logger.warning(f"  프로세스 {pid}가 terminate에 응답하지 않아 kill합니다.")
+                        proc.kill() # 강제 종료
+                        proc.wait() # 강제 종료 후 대기
+                        logger.info(f"  프로세스 {pid}가 강제 종료되었습니다.")
+                else:
+                    logger.info("  프로세스 종료를 취소했습니다. 서버를 시작할 수 없습니다.")
+                    sys.exit(1)
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e_proc:
+                logger.error(f"  프로세스 {pid} 처리 중 오류: {e_proc}")
+            except EOFError:
+                 logger.warning("사용자 입력을 받을 수 없는 환경입니다. 프로세스를 종료하지 않고 진행합니다.")
+            except Exception as e_input: 
+                logger.error(f"  입력 처리 중 오류 또는 중단: {e_input}")
+                sys.exit(1)
+    else:
+        logger.info(f"포트 {port}는 현재 사용 중이지 않습니다.")
+
 def main():
     """서버 실행 메인 함수"""
     parser = argparse.ArgumentParser(description="PMAgent MCP 서버 실행")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="호스트 주소 (기본값: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=8082, help="포트 번호 (기본값: 8082)")
+    parser.add_argument("--port", type=int, default=8083, help="포트 번호 (기본값: 8083)")
     parser.add_argument("--data-dir", type=str, help="데이터 디렉토리 경로")
     
     args = parser.parse_args()
@@ -42,6 +120,9 @@ def main():
     # 환경 변수 설정
     if args.data_dir:
         os.environ["DATA_DIR"] = args.data_dir
+
+    # 서버 시작 전 포트 확인 및 프로세스 정리
+    check_and_kill_process_on_port(args.host, args.port)
     
     # 서버 시작
     try:

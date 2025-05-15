@@ -1,0 +1,4 @@
+{
+  "success": false,
+  "error": "Confirmation string mismatch. Please provide \"CLEAR_ALL_MY_DATA\" to confirm data deletion."
+}

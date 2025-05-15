@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "requests": [
+    {
+      "id": "f49030c4-4abb-44a9-90e9-3465ef805eb4",
+      "originalRequest": "웹 애플리케이션 개발 프로젝트 계획",
+      "status": "PENDING",
+      "createdAt": "2025-05-05T12:08:45.361641",
+      "updatedAt": "2025-05-05T12:08:45.361641",
+      "taskCount": 2,
+      "completedCount": 0,
+      "progress": "0/2"
+    },
+    {
+      "id": "57e48d1d-ae0c-4707-9031-d57030403510",
+      "originalRequest": "웹 애플리케이션 개발 프로젝트 계획",
+      "status": "PENDING",
+      "createdAt": "2025-05-05T12:10:01.664011",
+      "updatedAt": "2025-05-05T12:10:01.664011",
+      "taskCount": 2,
+      "completedCount": 0,
+      "progress": "0/2"
+    },
+    {
+      "id": "a49efcc1-c2b9-4666-b35d-4779cfa33495",
+      "originalRequest": "웹 애플리케이션 개발 프로젝트 계획",
+      "status": "PENDING",
+      "createdAt": "2025-05-05T12:04:38.610680",
+      "updatedAt": "2025-05-05T12:04:38.610680",
+      "taskCount": 2,
+      "completedCount": 0,
+      "progress": "0/2"
+    }
+  ]
+}

@@ -15,17 +15,21 @@ import requests
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("test_client.log"),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
 # 서버 URL
-SERVER_URL = "http://localhost:8082"
+SERVER_URL = "http://localhost:8085"
 
 # 도구 목록 가져오기
 def get_tools():
     try:
-        response = requests.get(f"{SERVER_URL}/tools")
+        response = requests.get(f"{SERVER_URL}/mcp/tools")
         if response.status_code == 200:
             return response.json().get("tools", [])
         else:
@@ -53,8 +57,8 @@ def send_jsonrpc(method, params=None):
     
     try:
         response = requests.post(
-            SERVER_URL,
-            json=payload
+            f"{SERVER_URL}/mcp/invoke",
+            json={"name": method, "parameters": params}
         )
         
         logger.info(f"응답 상태 코드: {response.status_code}")
@@ -89,7 +93,7 @@ def create_request_planning():
 
 # 요청 목록 조회
 def list_requests():
-    return send_jsonrpc("list_requests", {})
+    return send_jsonrpc("list_requests", {"random_string": "test"})
 
 # 메인 함수
 def main():

@@ -1,0 +1,70 @@
+===== 도구 목록 조회 =====
+도구 목록 (11개):
+  - register_agent: 새 에이전트를 등록합니다.
+  - request_planning: 새 요청을 계획하고 작업을 생성합니다.
+  - get_next_task: 다음 실행 가능한 작업을 가져옵니다.
+  - mark_task_done: 작업을 완료 처리합니다.
+  - approve_task_completion: 작업 완료를 승인합니다.
+  - approve_request_completion: 요청 완료를 승인합니다.
+  - open_task_details: 작업 세부 정보를 조회합니다.
+  - list_requests: 모든 요청 목록을 조회합니다.
+  - add_tasks_to_request: 기존 요청에 작업을 추가합니다.
+  - update_task: 작업 정보를 업데이트합니다.
+  - delete_task: 작업을 삭제합니다.
+
+===== 태스크 요청 테스트 =====
+요청: {
+  "name": "request_planning",
+  "parameters": {
+    "originalRequest": "웹 애플리케이션 개발 프로젝트 계획",
+    "tasks": [
+      {
+        "title": "요구사항 분석",
+        "description": "프로젝트 요구사항을 분석하고 기능 목록 작성"
+      },
+      {
+        "title": "디자인 시안 작성",
+        "description": "UI/UX 디자인 시안 작성 및 검토"
+      }
+    ]
+  }
+}
+상태 코드: 200
+응답: {
+  "success": false,
+  "error": "string indices must be integers"
+}
+
+===== 요청 목록 조회 테스트 =====
+요청: {
+  "name": "list_requests",
+  "parameters": {
+    "random_string": "test"
+  }
+}
+상태 코드: 200
+응답: {
+  "success": true,
+  "requests": [
+    {
+      "id": "f49030c4-4abb-44a9-90e9-3465ef805eb4",
+      "originalRequest": "웹 애플리케이션 개발 프로젝트 계획",
+      "status": "PENDING",
+      "createdAt": "2025-05-05T12:08:45.361641",
+      "updatedAt": "2025-05-05T12:08:45.361641",
+      "taskCount": 2,
+      "completedCount": 0,
+      "progress": "0/2"
+    },
+    {
+      "id": "a49efcc1-c2b9-4666-b35d-4779cfa33495",
+      "originalRequest": "웹 애플리케이션 개발 프로젝트 계획",
+      "status": "PENDING",
+      "createdAt": "2025-05-05T12:04:38.610680",
+      "updatedAt": "2025-05-05T12:04:38.610680",
+      "taskCount": 2,
+      "completedCount": 0,
+      "progress": "0/2"
+    }
+  ]
+}

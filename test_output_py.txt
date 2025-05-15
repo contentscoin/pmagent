@@ -1,0 +1,100 @@
+서버 연결 확인됨. 테스트를 시작합니다...
+
+===== 호출: list_requests =====
+요청 페이로드: {
+  "name": "list_requests",
+  "parameters": {
+    "random_string": "initial_list"
+  }
+}
+응답 상태 코드: 200
+응답 JSON: {
+  "success": true,
+  "requests": [],
+  "count": 0
+}
+
+===== 호출: request_planning =====
+요청 페이로드: {
+  "name": "request_planning",
+  "parameters": {
+    "originalRequest": "Web Application Development Project Plan (Python Test)",
+    "tasks": [
+      {
+        "title": "Requirements Analysis",
+        "description": "Analyze project requirements and create a feature list"
+      },
+      {
+        "title": "Design Draft",
+        "description": "Create and review UI/UX design drafts"
+      }
+    ]
+  }
+}
+응답 상태 코드: 200
+응답 JSON: {
+  "success": true,
+  "requestId": "51cd5a2b-9e5f-4e6d-afb6-16d143148256",
+  "taskCount": 2,
+  "progressTable": "| # | ID | 작업 제목 | 상태 | 승인 |\\n|---|----|-----------|------|------|\\n| 1 | eacb0f2c | Requirements Analysis | ⏳ 대기 중 | ✗ |\\n| 2 | 9a555db0 | Design Draft | ⏳ 대기 중 | ✗ |\\n"
+}
+
+===== 호출: request_planning =====
+요청 페이로드: {
+  "name": "request_planning",
+  "parameters": {
+    "originalRequest": "한글 웹 애플리케이션 개발 프로젝트 계획 (Python 테스트)",
+    "tasks": [
+      {
+        "title": "한글 요구사항 분석",
+        "description": "프로젝트 요구사항을 분석하고 기능 목록 작성 (한글)"
+      },
+      {
+        "title": "한글 디자인 시안 작성",
+        "description": "UI/UX 디자인 시안 작성 및 검토 (한글)"
+      }
+    ]
+  }
+}
+응답 상태 코드: 200
+응답 JSON: {
+  "success": true,
+  "requestId": "ae7b537b-e8c5-4189-9c9a-18f90ccaf110",
+  "taskCount": 2,
+  "progressTable": "| # | ID | 작업 제목 | 상태 | 승인 |\\n|---|----|-----------|------|------|\\n| 1 | ae435ffc | 한글 요구사항 분석 | ⏳ 대기 중 | ✗ |\\n| 2 | 06e7f6ce | 한글 디자인 시안 작성 | ⏳ 대기 중 | ✗ |\\n"
+}
+
+===== 호출: list_requests =====
+요청 페이로드: {
+  "name": "list_requests",
+  "parameters": {
+    "random_string": "final_list"
+  }
+}
+응답 상태 코드: 200
+응답 JSON: {
+  "success": true,
+  "requests": [
+    {
+      "id": "51cd5a2b-9e5f-4e6d-afb6-16d143148256",
+      "originalRequest": "Web Application Development Project Plan (Python Test)",
+      "status": "PENDING",
+      "createdAt": "2025-05-08T07:58:35.287720",
+      "updatedAt": "2025-05-08T07:58:35.287720",
+      "totalTasks": 2,
+      "doneTasks": 0,
+      "approvedTasks": 0
+    },
+    {
+      "id": "ae7b537b-e8c5-4189-9c9a-18f90ccaf110",
+      "originalRequest": "한글 웹 애플리케이션 개발 프로젝트 계획 (Python 테스트)",
+      "status": "PENDING",
+      "createdAt": "2025-05-08T07:58:35.294796",
+      "updatedAt": "2025-05-08T07:58:35.294796",
+      "totalTasks": 2,
+      "doneTasks": 0,
+      "approvedTasks": 0
+    }
+  ],
+  "count": 2
+}

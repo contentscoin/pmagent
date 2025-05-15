@@ -9,6 +9,7 @@
 __version__ = "0.1.0"
 
 from .task_manager import task_manager
+from .mcp_common import MCPServer
 from .mcp_server import app, start_server
 
-__all__ = ["task_manager", "app", "start_server"] 
+__all__ = ["task_manager", "MCPServer", "app", "start_server"] 

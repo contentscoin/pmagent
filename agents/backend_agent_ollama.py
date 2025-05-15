@@ -1,8 +1,14 @@
 import os
 import requests
 import json
+import time
+import random
+import uuid  # 에이전트 ID 생성용
 from typing import Dict, List, Any, Optional, Union
 import logging
+import sys # sys 모듈 추가
+import re # 정규식 사용을 위해 추가
+import ast
 try:
     from .mcp_agent_helper import MCPAgentHelper
     MCP_AVAILABLE = True
@@ -29,8 +35,10 @@ class BackendAgentOllama(BaseTool):
                 api_key: Optional[str] = None, 
                 api_base: Optional[str] = None,
                 model: str = "llama3.2:latest",
-                use_mcp: bool = False,
-                mcp_helper = None,
+                use_mcp: bool = False, # MCP 사용 여부
+                mcp_helper: Optional[Any] = None,
+                agent_id: Optional[str] = None, # 에이전트 고유 ID
+                mcp_server_url: str = "http://localhost:8083/mcp/invoke", # MCP 서버 URL
                 temperature: float = 0.7):
         """
         Ollama 백엔드 에이전트 초기화
@@ -41,6 +49,8 @@ class BackendAgentOllama(BaseTool):
             model: 사용할 Ollama 모델 (기본값: llama3.2:latest)
             use_mcp: MCP 사용 여부
             mcp_helper: MCP 헬퍼 인스턴스
+            agent_id: 에이전트의 고유 ID (없으면 생성)
+            mcp_server_url: PMAgent MCP 서버의 invoke 엔드포인트 URL
             temperature: 생성 온도 (0.0 ~ 1.0)
         """
         super().__init__()
@@ -51,6 +61,13 @@ class BackendAgentOllama(BaseTool):
         self.temperature = temperature
         self.use_mcp = use_mcp
         self.mcp_helper = mcp_helper
+        
+        self.agent_id = agent_id or f"backend-agent-{uuid.uuid4()}"
+        self.mcp_server_url = mcp_server_url
+        
+        # 현재 작업 중인 프로젝트 컨텍스트 정보
+        self.current_project_id: Optional[str] = None
+        self.current_project_name: Optional[str] = None
         
         # 프로젝트 구성 초기화
         self.project_config = self._initialize_project_config()
@@ -223,6 +240,67 @@ class BackendAgentOllama(BaseTool):
             logger.error(f"Ollama API 요청 중 오류 발생: {str(e)}")
             raise
             
+    def try_fix_json_string(self, json_str: str) -> Optional[Dict]:
+        # 1. 코드 블록/주석/불필요한 텍스트 제거
+        json_str = re.sub(r'```[a-zA-Z]*', '', json_str)
+        json_str = re.sub(r'```', '', json_str)
+        json_str = re.sub(r'//.*', '', json_str)
+        # 2. 이중 따옴표 중첩 제거
+        json_str = json_str.replace('\\"', '"')
+        # 3. true/false/null → True/False/None (파이썬용)
+        json_str = json_str.replace('true', 'True').replace('false', 'False').replace('null', 'None')
+        # 4. 마지막 } 또는 ]까지 자르기
+        last_brace = max(json_str.rfind('}'), json_str.rfind(']'))
+        if last_brace != -1:
+            json_str = json_str[:last_brace+1]
+        try:
+            return ast.literal_eval(json_str)
+        except Exception:
+            return None
+
+    def _parse_ollama_json_response(self, ollama_output: str, function_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Ollama 응답 문자열에서 JSON 객체를 robust하게 파싱합니다.
+        """
+        if not isinstance(ollama_output, str):
+            logger.warning(f"{function_name}: _parse_ollama_json_response에 문자열이 아닌 입력이 들어왔습니다: {type(ollama_output)}")
+            return None
+
+        # 1. 코드 블록 전체 추출 (줄바꿈 포함)
+        match = re.search(r"```json\s*([\s\S]*?)\s*```", ollama_output)
+        if match:
+            json_str = match.group(1).strip()
+            if not json_str.lstrip().startswith('{'):
+                brace_idx = json_str.find('{')
+                if brace_idx != -1:
+                    json_str = json_str[brace_idx:]
+            try:
+                parsed_json = json.loads(json_str)
+                logger.info(f"{function_name}: 코드 블록에서 JSON 파싱 성공.")
+                return parsed_json
+            except json.JSONDecodeError as e:
+                logger.warning(f"{function_name}: 코드 블록 내 JSON 파싱 실패: {e}. 추출된 JSON 문자열: {json_str[:500]}...")
+                # 자동 보정 시도
+                fixed = self.try_fix_json_string(json_str)
+                if fixed:
+                    logger.info(f"{function_name}: try_fix_json_string로 JSON 보정 파싱 성공.")
+                    return fixed
+                return None
+        else:
+            logger.info(f"{function_name}: 응답에서 '```json ... ```' 코드 블록을 찾지 못했습니다. 전체 문자열을 직접 JSON으로 파싱 시도합니다.")
+            try:
+                parsed_json = json.loads(ollama_output)
+                logger.info(f"{function_name}: 전체 문자열을 JSON으로 직접 파싱 성공.")
+                return parsed_json
+            except json.JSONDecodeError as e:
+                logger.warning(f"{function_name}: 전체 문자열 직접 JSON 파싱 실패: {e}. Ollama 원본 응답 일부: {ollama_output[:500]}")
+                # 자동 보정 시도
+                fixed = self.try_fix_json_string(ollama_output)
+                if fixed:
+                    logger.info(f"{function_name}: try_fix_json_string로 JSON 보정 파싱 성공.")
+                    return fixed
+                return None
+
     def create_api_endpoint(self, description: str) -> Dict[str, Any]:
         """
         API 엔드포인트 생성
@@ -234,87 +312,40 @@ class BackendAgentOllama(BaseTool):
             생성된 API 엔드포인트 정보
         """
         logger.info(f"API 엔드포인트 생성 요청: {description}")
-        
-        # HTTP 메서드 감지
-        http_method = self.detect_http_method(description)
-        endpoint = self.detect_endpoint(description)
-        
-        # Ollama API 요청 프롬프트 작성
+        project_context_info = ""
+        if self.current_project_id and self.current_project_name:
+            project_context_info = f"현재 작업 중인 프로젝트는 '{self.current_project_name}'(ID: {self.current_project_id})입니다. "
+        elif self.current_project_id:
+            project_context_info = f"현재 작업 중인 프로젝트 ID는 {self.current_project_id}입니다. "
+
         prompt = f"""
-당신은 숙련된 백엔드 개발자입니다. 다음 설명을 바탕으로 API 엔드포인트를 구현해야 합니다:
+        {project_context_info}다음은 API 엔드포인트 생성 요청입니다: {description}
 
-설명: {description}
-HTTP 메서드: {http_method}
-엔드포인트 경로: {endpoint}
-프레임워크: {self.project_config.get('framework', 'Express.js')}
-데이터베이스: {self.project_config.get('database', 'MongoDB')}
+        프로젝트 설정:
+        - 프레임워크: {self.project_config.get("framework")}
+        - API 버전: {self.project_config.get("api_version")}
+        - API 경로: {self.project_config.get("api_path")}
 
-요청 형식:
-1. 엔드포인트 경로와 HTTP 메서드를 확인하세요.
-2. 필요한 요청 파라미터와 응답 형식을 명시하세요.
-3. 엔드포인트 구현에 필요한 전체 코드를 작성하세요.
-4. 오류 처리 로직을 포함하세요.
-5. API 응답은 일관된 형식을 따라야 합니다.
+        응답은 다음 JSON 형식을 엄격하게 따라야 합니다. 코드 블록 안에 JSON을 포함하고, 다른 설명은 넣지 마십시오:
+        ```json
+        {{
+            "endpoint": "/api/v1/example",
+            "method": "GET", // GET, POST, PUT, DELETE 등
+            "description": "API 엔드포인트에 대한 간략한 설명",
+            "parameters": [
+                {{"name": "param_name", "type": "string", "description": "파라미터 설명", "required": true}}
+            ],
+            "responses": [
+                {{"status": 200, "description": "성공 응답 설명", "example": {{"message": "성공"}}}}
+            ],
+            "code": "// 여기에 {self.project_config.get("framework")} 프레임워크 기반의 API 엔드포인트 코드를 작성합니다.\n// 예시: JavaScript 또는 TypeScript 코드"
+        }}
+        ```
+        요청에 대한 API 엔드포인트 정의를 생성해주세요.
+        """
+        ollama_response = self._ollama_request(prompt)
+        return self._parse_ollama_json_response(ollama_response.get("response", ""), "create_api_endpoint")
 
-JSON 형식으로 응답하세요:
-```json
-{{
-    "endpoint": "엔드포인트 경로",
-    "method": "HTTP 메서드",
-    "description": "간단한 설명",
-    "parameters": [{{"name": "파라미터명", "type": "타입", "description": "설명", "required": true}}, ...],
-    "responses": [{{"status": 200, "description": "설명", "example": {{}}}}],
-    "code": "// 구현 코드"
-}}
-```
-"""
-        
-        # Ollama 요청 수행
-        try:
-            response = self._ollama_request(prompt)
-            
-            # 응답 파싱
-            output = response.get("response", "")
-            
-            # JSON 추출
-            json_match = None
-            try:
-                # JSON 블록이 있는 경우 추출
-                if "```json" in output and "```" in output.split("```json", 1)[1]:
-                    json_text = output.split("```json", 1)[1].split("```", 1)[0].strip()
-                    json_match = json.loads(json_text)
-                else:
-                    # 그냥 JSON인 경우
-                    json_match = json.loads(output)
-            except:
-                # JSON 파싱 오류인 경우 텍스트 그대로 반환
-                logger.warning("JSON 파싱 실패, 텍스트 응답으로 처리합니다")
-                return {
-                    "endpoint": endpoint,
-                    "method": http_method,
-                    "description": description,
-                    "code": output
-                }
-            
-            if json_match:
-                return json_match
-            else:
-                return {
-                    "endpoint": endpoint,
-                    "method": http_method,
-                    "description": description,
-                    "code": output
-                }
-                
-        except Exception as e:
-            logger.error(f"API 엔드포인트 생성 중 오류 발생: {str(e)}")
-            return {
-                "endpoint": endpoint,
-                "method": http_method,
-                "description": description,
-                "error": str(e)
-            }
-            
     def create_database_schema(self, description: str) -> Dict[str, Any]:
         """
         데이터베이스 스키마 생성
@@ -326,88 +357,43 @@ JSON 형식으로 응답하세요:
             생성된 데이터베이스 스키마 정보
         """
         logger.info(f"데이터베이스 스키마 생성 요청: {description}")
-        
-        # Ollama API 요청 프롬프트 작성
+        project_context_info = ""
+        if self.current_project_id and self.current_project_name:
+            project_context_info = f"현재 작업 중인 프로젝트는 '{self.current_project_name}'(ID: {self.current_project_id})입니다. "
+        elif self.current_project_id:
+            project_context_info = f"현재 작업 중인 프로젝트 ID는 {self.current_project_id}입니다. "
+
         prompt = f"""
-당신은 숙련된 백엔드 개발자입니다. 다음 설명을 바탕으로 데이터베이스 스키마를 구현해야 합니다:
+        {project_context_info}다음은 데이터베이스 스키마 생성 요청입니다: {description}
 
-설명: {description}
-데이터베이스: {self.project_config.get('database', 'MongoDB')}
-프레임워크: {self.project_config.get('framework', 'Express.js')}
+        프로젝트 설정:
+        - 데이터베이스: {self.project_config.get("database")}
+        - 모델 경로: {self.project_config.get("models_path")}
 
-요청 형식:
-1. 데이터베이스 스키마 설계를 위한 엔티티를 식별하세요.
-2. 각 엔티티의 속성과 데이터 타입을 명시하세요.
-3. 엔티티 간의 관계를 정의하세요.
-4. 스키마 구현에 필요한 전체 코드를 작성하세요.
-
-JSON 형식으로 응답하세요:
-```json
-{{
-    "database": "데이터베이스 종류",
-    "entities": [
+        응답은 다음 JSON 형식을 엄격하게 따라야 합니다. 코드 블록 안에 JSON을 포함하고, 다른 설명은 넣지 마십시오:
+        ```json
         {{
-            "name": "엔티티명",
-            "description": "설명",
-            "attributes": [
-                {{"name": "속성명", "type": "타입", "description": "설명", "required": true, "unique": true}},
-                ...
+            "database": "{self.project_config.get("database")}",
+            "entities": [
+                {{
+                    "name": "ExampleEntity",
+                    "description": "엔티티 설명",
+                    "attributes": [
+                        {{"name": "attribute_name", "type": "String", "description": "속성 설명", "required": true, "unique": false, "default": null, "ref": null}}
+                    ],
+                    "relationships": [
+                        {{"entity": "RelatedEntity", "type": "One-to-Many", "description": "관계 설명"}}
+                    ]
+                }}
             ],
-            "relationships": [
-                {{"entity": "관련 엔티티", "type": "관계 타입", "description": "설명"}},
-                ...
-            ]
-        }},
-        ...
-    ],
-    "code": "// 구현 코드"
-}}
-```
-"""
-        
-        # Ollama 요청 수행
-        try:
-            response = self._ollama_request(prompt)
-            
-            # 응답 파싱
-            output = response.get("response", "")
-            
-            # JSON 추출
-            json_match = None
-            try:
-                # JSON 블록이 있는 경우 추출
-                if "```json" in output and "```" in output.split("```json", 1)[1]:
-                    json_text = output.split("```json", 1)[1].split("```", 1)[0].strip()
-                    json_match = json.loads(json_text)
-                else:
-                    # 그냥 JSON인 경우
-                    json_match = json.loads(output)
-            except:
-                # JSON 파싱 오류인 경우 텍스트 그대로 반환
-                logger.warning("JSON 파싱 실패, 텍스트 응답으로 처리합니다")
-                return {
-                    "database": self.project_config.get('database', 'MongoDB'),
-                    "description": description,
-                    "code": output
-                }
-            
-            if json_match:
-                return json_match
-            else:
-                return {
-                    "database": self.project_config.get('database', 'MongoDB'),
-                    "description": description,
-                    "code": output
-                }
-                
-        except Exception as e:
-            logger.error(f"데이터베이스 스키마 생성 중 오류 발생: {str(e)}")
-            return {
-                "database": self.project_config.get('database', 'MongoDB'),
-                "description": description,
-                "error": str(e)
-            }
-            
+            "code": "// 여기에 {self.project_config.get("database")} 스키마 정의 코드를 작성합니다.\n// 예시: Mongoose (JavaScript), SQLAlchemy (Python) 등"
+        }}
+        ```
+        요청에 대한 데이터베이스 스키마 정의를 생성해주세요.
+        """
+        ollama_response = self._ollama_request(prompt)
+        return self._parse_ollama_json_response(ollama_response.get("response", ""), "create_database_schema")
+
     def create_authentication_system(self, description: str) -> Dict[str, Any]:
         """
         인증 시스템 생성
@@ -419,80 +405,36 @@ JSON 형식으로 응답하세요:
             생성된 인증 시스템 정보
         """
         logger.info(f"인증 시스템 생성 요청: {description}")
-        
-        # Ollama API 요청 프롬프트 작성
+        project_context_info = ""
+        if self.current_project_id and self.current_project_name:
+            project_context_info = f"현재 작업 중인 프로젝트는 '{self.current_project_name}'(ID: {self.current_project_id})입니다. "
+        elif self.current_project_id:
+            project_context_info = f"현재 작업 중인 프로젝트 ID는 {self.current_project_id}입니다. "
+
         prompt = f"""
-당신은 숙련된 백엔드 개발자입니다. 다음 설명을 바탕으로 인증 시스템을 구현해야 합니다:
+        {project_context_info}다음은 인증 시스템 생성 요청입니다: {description}
 
-설명: {description}
-프레임워크: {self.project_config.get('framework', 'Express.js')}
-인증 방식: {self.project_config.get('auth_provider', 'JWT')}
+        프로젝트 설정:
+        - 인증 제공자: {self.project_config.get("auth_provider")}
+        - 프레임워크: {self.project_config.get("framework")}
 
-요청 형식:
-1. 인증 시스템의 주요 기능을 식별하세요.
-2. 사용자 인증 흐름을 설계하세요.
-3. 보안 고려사항을 반영하세요.
-4. 인증 시스템 구현에 필요한 전체 코드를 작성하세요.
+        응답은 다음 JSON 형식을 엄격하게 따라야 합니다. 코드 블록 안에 JSON을 포함하고, 다른 설명은 넣지 마십시오:
+        ```json
+        {{
+            "auth_method": "{self.project_config.get("auth_provider")}",
+            "features": ["로그인", "회원가입", "토큰 갱신"],
+            "flow": ["사용자 등록", "로그인 및 토큰 발급", "토큰 검증"],
+            "endpoints": [
+                {{"path": "/api/auth/register", "method": "POST", "description": "회원가입"}}
+            ],
+            "code": "// 여기에 {self.project_config.get("auth_provider")} 기반 인증 시스템 코드를 {self.project_config.get("framework")} 프레임워크에 맞게 작성합니다."
+        }}
+        ```
+        요청에 대한 인증 시스템 정의를 생성해주세요.
+        """
+        ollama_response = self._ollama_request(prompt)
+        return self._parse_ollama_json_response(ollama_response.get("response", ""), "create_authentication_system")
 
-JSON 형식으로 응답하세요:
-```json
-{{
-    "auth_method": "인증 방식",
-    "features": ["기능1", "기능2", ...],
-    "flow": ["단계1", "단계2", ...],
-    "endpoints": [
-        {{"path": "경로", "method": "HTTP 메서드", "description": "설명"}},
-        ...
-    ],
-    "security_considerations": ["고려사항1", "고려사항2", ...],
-    "code": "// 구현 코드"
-}}
-```
-"""
-        
-        # Ollama 요청 수행
-        try:
-            response = self._ollama_request(prompt)
-            
-            # 응답 파싱
-            output = response.get("response", "")
-            
-            # JSON 추출
-            json_match = None
-            try:
-                # JSON 블록이 있는 경우 추출
-                if "```json" in output and "```" in output.split("```json", 1)[1]:
-                    json_text = output.split("```json", 1)[1].split("```", 1)[0].strip()
-                    json_match = json.loads(json_text)
-                else:
-                    # 그냥 JSON인 경우
-                    json_match = json.loads(output)
-            except:
-                # JSON 파싱 오류인 경우 텍스트 그대로 반환
-                logger.warning("JSON 파싱 실패, 텍스트 응답으로 처리합니다")
-                return {
-                    "auth_method": self.project_config.get('auth_provider', 'JWT'),
-                    "description": description,
-                    "code": output
-                }
-            
-            if json_match:
-                return json_match
-            else:
-                return {
-                    "auth_method": self.project_config.get('auth_provider', 'JWT'),
-                    "description": description,
-                    "code": output
-                }
-                
-        except Exception as e:
-            logger.error(f"인증 시스템 생성 중 오류 발생: {str(e)}")
-            return {
-                "auth_method": self.project_config.get('auth_provider', 'JWT'),
-                "description": description,
-                "error": str(e)
-            }
-            
     def run_task(self, description: str) -> str:
         """
         BackendAgent 메서드 오버라이드: 태스크 실행
@@ -517,12 +459,13 @@ JSON 형식으로 응답하세요:
         # 태스크 유형 결정
         description_lower = description.lower()
         
-        if any(keyword in description_lower for keyword in api_keywords):
-            logger.info(f"API 엔드포인트 태스크로 인식: {description}")
-            return self.create_api_endpoint(description)
-        elif any(keyword in description_lower for keyword in schema_keywords):
+        # 데이터베이스 스키마 관련 작업을 먼저 확인하여 우선순위를 높입니다.
+        if any(keyword in description_lower for keyword in schema_keywords):
             logger.info(f"데이터베이스 스키마 태스크로 인식: {description}")
             return self.create_database_schema(description)
+        elif any(keyword in description_lower for keyword in api_keywords):
+            logger.info(f"API 엔드포인트 태스크로 인식: {description}")
+            return self.create_api_endpoint(description)
         elif any(keyword in description_lower for keyword in auth_keywords):
             logger.info(f"인증 시스템 태스크로 인식: {description}")
             return self.create_authentication_system(description)
@@ -534,11 +477,29 @@ JSON 형식으로 응답하세요:
             prompt = f"""
 당신은 숙련된 백엔드 개발자입니다. 다음 설명을 바탕으로 백엔드 작업을 수행해야 합니다:
 
-설명: {description}
-프레임워크: {self.project_config.get('framework', 'Express.js')}
-데이터베이스: {self.project_config.get('database', 'MongoDB')}
+설명: {{description}}
+프레임워크: {{self.project_config.get('framework', 'Express.js')}}
+데이터베이스: {{self.project_config.get('database', 'MongoDB')}}
 
-작업 결과를 JSON 형식으로 반환하세요. 코드가 필요한 경우 포함하세요.
+중요: 반드시 다음 JSON 스키마를 정확히 따라서 응답해주십시오.
+다른 설명이나 추가 텍스트 없이, 오직 순수한 JSON 객체만을 반환해야 합니다.
+생성된 JSON 응답은 반드시 ```json ... ``` 코드 블록으로 감싸주세요.
+만약 코드 블록 내에 JSON 외의 다른 텍스트(예: 설명)가 포함되면 안 됩니다.
+오직 유효한 JSON 데이터만 코드 블록 안에 있어야 합니다.
+
+```json
+{{
+    "task_description": "{description}",
+    "status": "completed or error",
+    "result_summary": "작업 결과 요약",
+    "details": {{
+        "key1": "value1",
+        "key2": "value2"
+    }},
+    "code_snippet": "// 관련 코드 스니펫 (있을 경우)",
+    "error_message": "오류 메시지 (오류 발생 시)"
+}}
+```
 """
             
             # Ollama 요청 수행
@@ -1396,28 +1357,194 @@ JSON 형식으로 응답하세요:
                 "summary": "성능 최적화 중 오류가 발생했습니다."
             }
 
-# 테스트 코드
+    def _call_pmagent_mcp(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """PMAgent MCP 서버의 도구를 호출합니다."""
+        payload = {
+            "name": tool_name,
+            "parameters": parameters
+        }
+        headers = {"Content-Type": "application/json"}
+
+        logger.debug(f"Backend Agent {self.agent_id} calling MCP tool: {tool_name} with params: {parameters}")
+
+        try:
+            response = requests.post(self.mcp_server_url, headers=headers, json=payload, timeout=15)
+            response.raise_for_status() # HTTP 오류 발생 시 예외 처리
+            result = response.json()
+            logger.debug(f"MCP tool {tool_name} response: {result}")
+            return result
+        except requests.exceptions.Timeout:
+            logger.error(f"MCP tool {tool_name} call timed out.")
+            return {"success": False, "error": "Request timed out"}
+        except requests.exceptions.RequestException as e:
+            logger.error(f"MCP tool {tool_name} call failed: {e}")
+            error_detail = str(e)
+            if e.response is not None:
+                try:
+                    error_detail += f" - Response: {e.response.text}"
+                except Exception:
+                    pass
+            return {"success": False, "error": error_detail}
+        except json.JSONDecodeError:
+            logger.error(f"MCP tool {tool_name} response is not valid JSON: {response.text}")
+            return {"success": False, "error": "Invalid JSON response from server"}
+
+    def _check_and_process_tasks(self, project_id_to_check: str):
+        """MCP 서버에서 다음 작업을 확인하고 실제 처리합니다."""
+        if not self.use_mcp:
+            logger.info("MCP is not enabled for this agent.")
+            return
+
+        logger.info(f"Backend Agent {self.agent_id} checking for next task for project {project_id_to_check}...")
+        get_task_params = {
+            "requestId": project_id_to_check,
+            "agentType": "BackendAgent",
+            "agentId": self.agent_id
+        }
+        result = self._call_pmagent_mcp("get_next_task", get_task_params)
+
+        if result.get("success") and result.get("hasNextTask"):
+            task_data = result.get("task")
+            # 프로젝트 컨텍스트 정보 추출 및 설정
+            self.current_project_id = result.get("projectId") 
+            self.current_project_name = result.get("projectName")
+            logger.info(f"Current project context set for BackendAgent: ID='{self.current_project_id}', Name='{self.current_project_name}'")
+            
+            if task_data:
+                task_id = task_data.get("id")
+                task_title = task_data.get("title")
+                task_description = task_data.get("description")
+
+                logger.info(f"Backend Agent {self.agent_id} assigned task: ID={task_id}, Title='{task_title}' for Project '{self.current_project_name}' ({self.current_project_id})")
+
+                completed_details = f"Task '{task_title}' (ID: {task_id}) processing initiated by {self.agent_id} for project {self.current_project_id}."
+                processing_status = "UNKNOWN"
+                max_detail_length = 300 # completedDetails에 포함될 결과 요약의 최대 길이
+
+                try:
+                    logger.info(f"Processing task {task_id}: {task_description} (Project: {self.current_project_id})")
+                    processing_result_obj = self.run_task(task_description)
+                    logger.info(f"Task {task_id} processing finished by Ollama.")
+                    processing_status = "PROCESSED"
+
+                    if isinstance(processing_result_obj, dict):
+                        # 성공적으로 파싱된 JSON 객체인 경우
+                        summary = processing_result_obj.get("result_summary")
+                        parsing_error_msg = processing_result_obj.get("parsing_error")
+                        status_from_obj = processing_result_obj.get("status", "completed")
+                        
+                        final_summary_parts = [f"Status: {status_from_obj}."]
+                        if summary:
+                            final_summary_parts.append(f"Summary: {summary}")
+                        elif parsing_error_msg:
+                            final_summary_parts.append(f"Notice: {parsing_error_msg}")
+                            raw_output_preview = processing_result_obj.get("details", {}).get("raw_output", "")[:100]
+                            if raw_output_preview:
+                                final_summary_parts.append(f"Raw data starts with: '{raw_output_preview}...'") 
+                        else:
+                            # result_summary 없고 parsing_error도 없으면, 전체 객체를 요약
+                            json_str_preview = json.dumps(processing_result_obj, ensure_ascii=False)
+                            if len(json_str_preview) > max_detail_length:
+                                final_summary_parts.append(f"Full result (JSON): {json_str_preview[:max_detail_length]}...")
+                            else:
+                                final_summary_parts.append(f"Full result (JSON): {json_str_preview}")
+                        
+                        completed_details = f"Task '{task_title}' processed by {self.agent_id} for project {self.current_project_id}. " + " ".join(final_summary_parts)
+                        if len(completed_details) > max_detail_length + 100: # 전체 completedDetails 길이도 제어
+                             completed_details = completed_details[:max_detail_length+97] + "..."
+
+                    else: # JSON 파싱 실패 등으로 인해 문자열로 반환된 경우 (또는 예상치 못한 타입)
+                        processing_status = "PROCESSED_WITH_FALLBACK"
+                        result_str = str(processing_result_obj)
+                        if len(result_str) > max_detail_length:
+                            completed_details = f"Task '{task_title}' processed by {self.agent_id} for project {self.current_project_id}. Model response (text, truncated): {result_str[:max_detail_length]}..."
+                        else:
+                            completed_details = f"Task '{task_title}' processed by {self.agent_id} for project {self.current_project_id}. Model response (text): {result_str}"
+                        logger.warning(f"Task {task_id} result was not a dict, treated as text. Type: {type(processing_result_obj)}")
+
+                except Exception as e:
+                    processing_status = "ERROR_IN_PROCESSING"
+                    logger.error(f"Error processing task {task_id} with Ollama or during result handling: {e}", exc_info=True)
+                    error_message = f"{type(e).__name__}: {str(e)[:150]}" # 오류 메시지 길이 제한
+                    completed_details = f"ERROR processing task '{task_title}' by {self.agent_id} for project {self.current_project_id}. Status: {processing_status}. Details: {error_message}"
+                
+                logger.info(f"Final completedDetails for task {task_id} (status: {processing_status}): {completed_details}")
+
+                # 작업 완료 보고
+                mark_done_params = {
+                    "requestId": project_id_to_check, # 또는 self.current_project_id 사용
+                    "taskId": task_id,
+                    "agentId": self.agent_id,
+                    "completedDetails": completed_details
+                }
+                done_result = self._call_pmagent_mcp("mark_task_done", mark_done_params)
+
+                if done_result.get("success"):
+                    logger.info(f"Successfully marked task {task_id} as done.")
+                else:
+                    logger.error(f"Failed to mark task {task_id} as done: {done_result.get('error')}")
+            else:
+                logger.warning("get_next_task succeeded but no task data received.")
+        elif result.get("success") and not result.get("hasNextTask"):
+            logger.info(f"No new assignable tasks found for project {project_id_to_check} for agent {self.agent_id}.")
+        else:
+            logger.error(f"Failed to get next task for project {project_id_to_check}: {result.get('error')}")
+
+    def start_working(self, project_id_to_work_on: str, interval: int = 10):
+        """
+        지정된 프로젝트 ID에 대해 주기적으로 작업을 확인하고 처리합니다.
+
+        Args:
+            project_id_to_work_on: 처리할 프로젝트 ID
+            interval: 작업 확인 간격 (초)
+        """
+        if not self.use_mcp:
+            logger.error("MCP is not enabled. Cannot start working loop.")
+            return
+
+        logger.info(f"Backend Agent {self.agent_id} starting to work on project {project_id_to_work_on} (checking every {interval} seconds)...")
+        try:
+            while True: # 실제 운영시 종료 조건 필요
+                self._check_and_process_tasks(project_id_to_work_on)
+                logger.debug(f"Waiting for {interval} seconds before next check...")
+                time.sleep(interval)
+        except KeyboardInterrupt:
+            logger.info(f"Backend Agent {self.agent_id} stopping work loop.")
+        except Exception as e:
+            logger.error(f"An error occurred during the working loop for project {project_id_to_work_on}: {e}", exc_info=True)
+
+# 테스트 코드 (예시)
 if __name__ == "__main__":
-    # Ollama 백엔드 에이전트 생성
-    agent = BackendAgentOllama(
-        api_base="http://localhost:11434/api",
-        model="codellama:7b-instruct"
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    # Backend 에이전트 생성 (MCP 활성화)
+    backend_agent = BackendAgentOllama(
+        api_base=os.environ.get("OLLAMA_API_BASE"), # 환경 변수 또는 기본값 사용
+        model=os.environ.get("OLLAMA_MODEL", "llama3.2:latest"),
+        use_mcp=True, 
+        agent_id="backend-agent-test-001", # 테스트용 고정 ID
+        mcp_server_url="http://localhost:8083/mcp/invoke" # 포트 수정
     )
-    
-    # API 엔드포인트 생성 테스트
-    api_desc = "사용자 프로필 정보를 가져오는 GET API 엔드포인트"
-    api_result = agent.create_api_endpoint(api_desc)
-    print("=== API 엔드포인트 생성 결과 ===")
-    print(json.dumps(api_result, indent=2, ensure_ascii=False))
-    
-    # 데이터베이스 스키마 생성 테스트
-    schema_desc = "온라인 쇼핑몰 제품 카탈로그 데이터베이스 스키마"
-    schema_result = agent.create_database_schema(schema_desc)
-    print("\n=== 데이터베이스 스키마 생성 결과 ===")
-    print(json.dumps(schema_result, indent=2, ensure_ascii=False))
-    
-    # 인증 시스템 생성 테스트
-    auth_desc = "OAuth 및 JWT를 사용한 사용자 인증 시스템"
-    auth_result = agent.create_authentication_system(auth_desc)
-    print("\n=== 인증 시스템 생성 결과 ===")
-    print(json.dumps(auth_result, indent=2, ensure_ascii=False)) 
+
+    # 명령행 인자에서 requestId 가져오기
+    if len(sys.argv) > 1:
+        current_request_id = sys.argv[1]
+    else:
+        # PMAgentOllama를 통해 생성된 요청 ID를 여기에 입력해야 합니다. (예비용/테스트용)
+        # 실제 운영 시에는 명령행 인자를 통해 받는 것이 좋습니다.
+        logger.warning("명령행 인자로 requestId가 제공되지 않았습니다. 코드 내의 기본 ID를 사용합니다.")
+        logger.warning("사용법: python -m agents.backend_agent_ollama <REQUEST_ID>")
+        current_request_id = "YOUR_PMAgent_GENERATED_REQUEST_ID_HERE" # 기본값 또는 오류 처리
+
+
+    if current_request_id == "YOUR_PMAgent_GENERATED_REQUEST_ID_HERE" or not current_request_id:
+        print("오류: 테스트를 위해 `requestId`를 명령행 인자로 제공해주세요.")
+        print("예시: python -m agents.backend_agent_ollama xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+    else:
+        print(f"\n=== Backend Agent MCP 작업 루프 테스트 시작 (Request ID: {current_request_id}) ===\n")
+        print(f"Backend Agent ({backend_agent.agent_id})가 요청 {current_request_id}에 대한 작업을 시작합니다.")
+        print("Ctrl+C를 눌러 중지하세요.")
+        try:
+            backend_agent.start_working(current_request_id)
+        except Exception as main_e:
+            logger.error(f"Backend Agent main loop encountered an error: {main_e}", exc_info=True)

@@ -1,8 +1,10 @@
 # 핵심 의존성 - 최소화된 버전
-fastapi==0.103.1
-uvicorn==0.23.2
+fastapi>=0.115.0
+uvicorn>=0.34.0
 python-multipart==0.0.6
 websockets==11.0.3
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
 requests==2.31.0
-aiohttp==3.7.4
+aiohttp>=3.11.0
+pydantic>=2.11.0
+psutil>=5.9.0 # 프로세스 및 시스템 유틸리티

@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+MCP 서버 모듈
+
+Model Context Protocol(MCP)를 구현하는 서버를 제공합니다.
+"""
+
 import os
 import sys
 import json
@@ -16,9 +22,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
 # MCP 도구 관련 모듈 가져오기
-from .task_manager import task_manager
+from pmagent.task_manager import task_manager as global_task_manager # 점진적으로 사용 줄일 예정
+from pmagent.mcp_common import MCPServer
+from pmagent.mcp_agent_api import create_mcp_api
+import pmagent.db_manager as db_manager # 이 임포트는 이미 절대 경로 스타일임
+import uuid # project_id, task_id 생성용
 
 # 로깅 설정
 logging.basicConfig(
@@ -28,11 +39,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# FastAPI 애플리케이션 생성
+# Lifespan 이벤트 핸들러 정의
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 애플리케이션 시작 시 실행될 코드
+    logger.info("FastAPI application startup.")
+    try:
+        logger.info("Initializing databases...")
+        db_manager.init_project_master_db()
+        db_manager.init_agent_shared_db()
+        logger.info("Databases initialized successfully.")
+    except Exception as e:
+        logger.error(f"Error initializing databases: {str(e)}")
+        # DB 초기화 실패 시 서버를 계속 실행할지, 아니면 종료할지 결정 필요
+        # 여기서는 로깅만 하고 계속 진행하도록 둡니다.
+
+    yield # 애플리케이션 실행
+
+    # 애플리케이션 종료 시 실행될 코드
+    logger.info("FastAPI application shutting down.")
+    # 기존 global_task_manager._save_data()는 이제 사용하지 않으므로 주석 처리 또는 삭제
+    # try:
+    #     global_task_manager._save_data() # 종료 시 데이터 저장
+    #     logger.info("Task manager data saved successfully on shutdown.")
+    # except Exception as e:
+    #     logger.error(f"Error saving task manager data on shutdown: {str(e)}")
+
+# FastAPI 애플리케이션 생성 (lifespan 추가)
 app = FastAPI(
     title="PMAgent MCP Server",
     description="프로젝트 관리를 위한 MCP(Model Context Protocol) 서버",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan # lifespan 컨텍스트 매니저 등록
 )
 
 # CORS 설정
@@ -64,7 +102,8 @@ TOOLS = [
         "name": "get_next_task",
         "description": "다음 대기 중인 태스크(아직 완료되지 않은)를 가져옵니다.",
         "parameters": {
-            "requestId": "요청 ID"
+            "requestId": "요청 ID",
+            "agentId": "작업을 요청하는 에이전트 ID"
         }
     },
     {
@@ -73,6 +112,7 @@ TOOLS = [
         "parameters": {
             "requestId": "요청 ID",
             "taskId": "태스크 ID",
+            "agentId": "작업을 완료하는 에이전트 ID",
             "completedDetails": "완료 상세 정보 (선택)"
         }
     },
@@ -128,89 +168,185 @@ TOOLS = [
         "parameters": {
             "taskId": "태스크 ID"
         }
+    },
+    {
+        "name": "clear_all_data",
+        "description": "모든 요청 및 태스크 데이터를 초기화합니다. (테스트용)",
+        "parameters": {
+            "confirmation": "데이터 삭제를 확인하려면 \"CLEAR_ALL_MY_DATA\"를 입력하세요."
+        }
     }
 ]
 
 # MCP 도구 구현 함수
-def request_planning(params):
+def request_planning(params: Dict[str, Any]): # 타입 힌트 명시
     """새 요청을 등록하고 태스크를 계획합니다."""
     try:
         logger.info(f"request_planning 호출됨: params={params}")
-        logger.info(f"params 타입: {type(params)}")
         
-        if "originalRequest" not in params:
-            raise ValueError("원본 요청 내용이 필요합니다.")
-        if "tasks" not in params:
-            raise ValueError("태스크 목록이 필요합니다.")
-            
-        # params["tasks"] 값을 확인하고 list 타입으로 확실하게 처리
-        tasks = params["tasks"]
-        if not isinstance(tasks, list):
-            raise ValueError(f"태스크 목록은 배열이어야 합니다. 현재 타입: {type(tasks)}")
-            
-        logger.info(f"태스크 목록: {tasks}")
-        
-        # 각 task가 유효한지 검증하고 필요한 경우 변환
-        validated_tasks = []
-        for i, task in enumerate(tasks):
-            if not isinstance(task, dict):
-                # 딕셔너리가 아닌 경우 변환 시도
-                try:
-                    task_dict = dict(task)
-                    logger.warning(f"태스크[{i}]가 딕셔너리가 아니어서 변환함: {task} -> {task_dict}")
-                    task = task_dict
-                except (TypeError, ValueError):
-                    raise ValueError(f"태스크[{i}]를 딕셔너리로 변환할 수 없습니다: {task}")
-            
-            # 필수 필드 확인
-            if "title" not in task:
-                raise ValueError(f"태스크[{i}]에 title 필드가 없습니다: {task}")
-            if "description" not in task:
-                raise ValueError(f"태스크[{i}]에 description 필드가 없습니다: {task}")
-                
-            # 문자열 변환
-            task_dict = {
-                "title": str(task["title"]),
-                "description": str(task["description"])
-            }
-            validated_tasks.append(task_dict)
-            
-        return task_manager.request_planning(
-            original_request=params["originalRequest"],
-            tasks=validated_tasks,
-            split_details=params.get("splitDetails")
-        )
-    except Exception as e:
-        logger.error(f"요청 계획 생성 실패: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        original_request_content = params.get("originalRequest")
+        tasks_data = params.get("tasks")
+        project_name_param = params.get("projectName") # PMAgent가 project 이름을 줄 수 있도록 가정
 
-def get_next_task(params):
+        if not original_request_content:
+            raise ValueError("Original request content (originalRequest) is required.")
+        if not tasks_data or not isinstance(tasks_data, list):
+            raise ValueError("Tasks list (tasks) is required and must be an array.")
+
+        project_id_param = params.get("projectId") # PMAgent가 project ID를 전달할 경우
+
+        if project_id_param:
+            project_id = project_id_param
+            # 기존 프로젝트가 있는지 확인
+            if not db_manager.get_project(project_id):
+                 # 프로젝트 이름 결정 (PMAgent가 전달한 이름을 우선 사용, 없으면 기본값)
+                project_name = project_name_param if project_name_param else f"Project for request {datetime.now().strftime('%Y%m%d%H%M%S')}"
+                logger.info(f"Attempting to add new project with provided ID: ID={project_id}, Name={project_name}")
+                created_project_id = db_manager.add_project(project_id=project_id, project_name=project_name)
+                if not created_project_id:
+                    logger.error(f"Failed to create project with provided ID: {project_id}")
+                    raise HTTPException(status_code=500, detail=f"Failed to initialize project in DB with ID: {project_id}")
+            else:
+                logger.info(f"Using existing project with ID: {project_id}")
+                created_project_id = project_id # 이미 존재하는 프로젝트 ID 사용
+        else:
+            project_id = f"proj_{uuid.uuid4().hex[:8]}" # 고유한 새 프로젝트 ID 생성
+            project_name = project_name_param if project_name_param else f"Project for request {datetime.now().strftime('%Y%m%d%H%M%S')}"
+            logger.info(f"Attempting to add new project: ID={project_id}, Name={project_name}")
+            created_project_id = db_manager.add_project(project_id=project_id, project_name=project_name)
+            if not created_project_id:
+                logger.error(f"Failed to create new project with ID: {project_id}")
+                raise HTTPException(status_code=500, detail=f"Failed to initialize new project in DB for ID: {project_id}")
+
+        logger.info(f"Project (ID: {created_project_id}) ready in ProjectMasterDB.")
+
+        created_task_ids = []
+        for i, task_data in enumerate(tasks_data):
+            if not isinstance(task_data, dict):
+                logger.warning(f"Task data at index {i} is not a dict, attempting to convert: {task_data}")
+                try:
+                    task_data = dict(task_data)
+                except (TypeError, ValueError):
+                    raise ValueError(f"Task data at index {i} could not be converted to a dict: {task_data}")
+
+            task_title = task_data.get("title")
+            if not task_title:
+                raise ValueError(f"Task at index {i} is missing a 'title'.")
+
+            task_id = task_data.get("id") or task_data.get("task_id") or f"task_{uuid.uuid4().hex[:10]}"
+            description = task_data.get("description")
+            status = task_data.get("status", 'pending') # PMAgent가 상태를 지정할 수 있도록
+            assigned_to = task_data.get("assigned_to") or task_data.get("assigned_to_agent_type")
+            dependencies = task_data.get("dependencies")
+
+            logger.info(f"Adding task to DB: ID={task_id}, Title='{task_title}', ProjectID={created_project_id}, AssignedTo='{assigned_to}', Dependencies={dependencies}, Status='{status}'")
+            
+            # ID가 이미 존재하는지 확인 (PMAgent가 ID를 제공한 경우)
+            if db_manager.get_master_task(task_id):
+                logger.warning(f"Task with ID {task_id} already exists. Updating instead of adding.")
+                # 여기서 업데이트 로직을 호출하거나, ID를 새로 생성하도록 처리할 수 있습니다.
+                # 지금은 간단히 경고만 하고 넘어갑니다. 또는 add_master_task가 ID 중복 시 예외를 발생시키도록 할 수 있습니다.
+                # 여기서는 add_master_task가 None을 반환하면 실패로 간주하고 다음으로 넘어가지 않도록 수정.
+                # 아니면, ID가 있으면 update, 없으면 insert 하는 upsert 로직이 필요합니다.
+                # 현재 db_manager.add_master_task는 ID 중복 시 None을 반환하므로, 아래 로직으로 충분합니다.
+                # 다만, 이 경우 PMAgent가 생성한 ID와 다른 ID로 저장될 수 있으므로 주의가 필요합니다.
+                # PMAgent가 생성한 ID를 그대로 사용하고 싶다면, add_master_task에서 ID 중복 시 예외를 발생시키고, 
+                # 여기서 try-except로 잡아서 update_master_task를 호출하는 방식이 더 명확할 수 있습니다.
+                # 지금은 PMAgent가 제공한 ID로 추가 시도, 실패 시 다음으로 넘어가지 않음
+                pass # ID 중복 시 add_master_task가 None을 반환할 것이므로 아래에서 처리됨
+
+            db_task_id_returned = db_manager.add_master_task(
+                task_id=task_id, # PMAgent가 제공한 ID 또는 새로 생성된 ID
+                project_id=created_project_id,
+                title=task_title,
+                description=description,
+                status=status,
+                assigned_to_agent_type=assigned_to,
+                dependencies=dependencies
+            )
+            if not db_task_id_returned:
+                logger.error(f"Failed to add task '{task_title}' (ID: {task_id}) to DB. It might already exist or another error occurred.")
+                # raise HTTPException(status_code=500, detail=f"Failed to save task '{task_title}' to DB.")
+            else:
+                created_task_ids.append(db_task_id_returned) # 실제 저장된 (또는 생성된) ID 사용
+        
+        logger.info(f"All tasks from planning request processed for project {created_project_id}. Total tasks effectively added/updated: {len(created_task_ids)}")
+
+        return {
+            "message": "Planning request processed successfully.",
+            "project_id": created_project_id,
+            "task_ids": created_task_ids,
+        }
+
+    except ValueError as ve:
+        logger.error(f"ValueError in request_planning: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error in request_planning: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+def get_next_task(params: Dict[str, Any]): # 타입 힌트 명시
     """다음 대기 중인 태스크를 가져옵니다."""
     try:
-        if "requestId" not in params:
-            raise ValueError("요청 ID가 필요합니다.")
-            
-        return task_manager.get_next_task(request_id=params["requestId"])
-    except Exception as e:
-        logger.error(f"다음 태스크 조회 실패: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.info(f"get_next_task 호출됨: params={params}")
+        # request_id는 이제 특정 프로젝트 컨텍스트를 직접 참조하는 project_id로 해석될 수 있음
+        # 또는, PMAgent가 여전히 request_id 스타일로 관리하고 서버가 project_id로 매핑할 수도 있음
+        # 여기서는 params에서 project_id와 agent_type을 받는다고 가정 (PMAgent의 plan_request에서 projectId를 반환했으므로)
+        project_id_param = params.get("projectId") # BackendAgent가 어떤 프로젝트의 태스크를 요청하는지
+        agent_type = params.get("agentType") # 어떤 유형의 에이전트가 태스크를 요청하는지 (예: "BackendAgent")
+        # agent_id = params.get("agentId") # 특정 에이전트 인스턴스 ID
 
-def mark_task_done(params):
+        if not agent_type:
+            raise ValueError("agentType is required to get the next task.")
+        
+        # project_id_param은 선택적일 수 있음. 없다면 해당 agent_type의 모든 프로젝트에서 태스크를 찾음.
+        task = db_manager.get_pending_assignable_task_for_agent(agent_type=agent_type, project_id=project_id_param)
+
+        if task:
+            project_id = task.get("project_id")
+            project_details = db_manager.get_project(project_id) if project_id else None
+            project_name = project_details.get("project_name") if project_details else "Unknown Project"
+
+            # 태스크 상태를 'assigned'로 업데이트 (선택적: 에이전트가 받으면 바로 assigned로 변경)
+            # db_manager.update_master_task_status(task['task_id'], 'assigned') 
+            # logger.info(f"Task {task['task_id']} assigned to {agent_type} for project {project_id}")
+
+            return {
+                "success": True, 
+                "hasNextTask": True, 
+                "projectId": project_id, 
+                "projectName": project_name,
+                "task": task
+            }
+        else:
+            logger.info(f"No assignable tasks found for agentType '{agent_type}' (Project: {project_id_param if project_id_param else 'Any'})")
+            return {"success": True, "hasNextTask": False, "message": f"No pending tasks for agentType '{agent_type}'."}
+    except ValueError as ve:
+        logger.error(f"ValueError in get_next_task: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Unexpected error in get_next_task: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+def mark_task_done(params: Dict[str, Any]): # 타입 힌트 명시
     """태스크를 완료 상태로 표시합니다."""
     try:
         if "requestId" not in params:
             raise ValueError("요청 ID가 필요합니다.")
         if "taskId" not in params:
             raise ValueError("태스크 ID가 필요합니다.")
+        if "agentId" not in params:
+            raise ValueError("agentId가 필요합니다.")
             
-        return task_manager.mark_task_done(
+        return global_task_manager.mark_task_done(
             request_id=params["requestId"],
             task_id=params["taskId"],
+            agent_id=params["agentId"],
             completed_details=params.get("completedDetails")
         )
     except Exception as e:
         logger.error(f"태스크 완료 처리 실패: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        return {"success": False, "error": str(e)}
 
 def approve_task_completion(params):
     """완료된 태스크를 승인합니다."""
@@ -220,7 +356,7 @@ def approve_task_completion(params):
         if "taskId" not in params:
             raise ValueError("태스크 ID가 필요합니다.")
             
-        return task_manager.approve_task_completion(
+        return global_task_manager.approve_task_completion(
             request_id=params["requestId"],
             task_id=params["taskId"]
         )
@@ -234,7 +370,7 @@ def approve_request_completion(params):
         if "requestId" not in params:
             raise ValueError("요청 ID가 필요합니다.")
             
-        return task_manager.approve_request_completion(
+        return global_task_manager.approve_request_completion(
             request_id=params["requestId"]
         )
     except Exception as e:
@@ -275,7 +411,7 @@ def add_tasks_to_request(params):
             }
             validated_tasks.append(task_dict)
             
-        return task_manager.add_tasks_to_request(
+        return global_task_manager.add_tasks_to_request(
             request_id=params["requestId"],
             tasks=validated_tasks
         )
@@ -291,7 +427,7 @@ def update_task(params):
         if "taskId" not in params:
             raise ValueError("태스크 ID가 필요합니다.")
             
-        return task_manager.update_task(
+        return global_task_manager.update_task(
             request_id=params["requestId"],
             task_id=params["taskId"],
             title=params.get("title"),
@@ -309,7 +445,7 @@ def delete_task(params):
         if "taskId" not in params:
             raise ValueError("태스크 ID가 필요합니다.")
             
-        return task_manager.delete_task(
+        return global_task_manager.delete_task(
             request_id=params["requestId"],
             task_id=params["taskId"]
         )
@@ -320,21 +456,88 @@ def delete_task(params):
 def list_requests(params):
     """모든 요청 목록을 가져옵니다."""
     try:
-        return task_manager.list_requests()
+        # 요청 목록 조회
+        requests_data = global_task_manager.requests
+        requests_list = []
+        
+        # 각 요청의 요약 정보 생성
+        for request_id, request_info in requests_data.items():
+            # 요청에 속한 태스크 정보 조회
+            task_count = len(request_info.get("tasks", []))
+            completed_count = 0
+            
+            # 완료된 태스크 수 계산
+            for task_id in request_info.get("tasks", []):
+                task_info = global_task_manager.tasks.get(task_id)
+                if task_info.get("status") == "COMPLETED":
+                    completed_count += 1
+            
+            # 요약 정보 추가
+            request_summary = {
+                "id": request_id,
+                "originalRequest": request_info.get("originalRequest", ""),
+                "status": request_info.get("status", "UNKNOWN"),
+                "createdAt": request_info.get("createdAt", ""),
+                "updatedAt": request_info.get("updatedAt", ""),
+                "taskCount": task_count,
+                "completedCount": completed_count,
+                "progress": f"{completed_count}/{task_count}"
+            }
+            requests_list.append(request_summary)
+        
+        return {"success": True, "requests": requests_list, "count": len(requests_list)}
     except Exception as e:
         logger.error(f"요청 목록 조회 실패: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
-def open_task_details(params):
+def open_task_details(params: Dict[str, Any]): # 타입 힌트 명시
     """태스크 상세 정보를 가져옵니다."""
+    task_id = params.get("taskId")
+    if not task_id:
+        raise ValueError("taskId is required.")
+    
+    task = db_manager.get_master_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task with ID '{task_id}' not found.")
+    return task
+
+# clear_all_data_wrapper 함수 정의 (DB 사용하도록 수정)
+def clear_all_data_wrapper(params):
+    """clear_all_data MCP 도구를 위한 래퍼 함수. DB 내용을 삭제합니다."""
     try:
-        if "taskId" not in params:
-            raise ValueError("태스크 ID가 필요합니다.")
-            
-        return task_manager.open_task_details(task_id=params["taskId"])
+        confirmation = params.get("confirmation")
+        required_confirmation_string = "CLEAR_ALL_MY_DATA"
+        if confirmation != required_confirmation_string:
+            logger.warning("데이터 초기화 확인 문자열이 일치하지 않아 작업을 취소합니다.")
+            return {
+                "success": False, 
+                "error": f"Confirmation string mismatch. Please provide \"{required_confirmation_string}\" to confirm data deletion."
+            }
+        
+        # DB 파일 직접 삭제 방식으로 변경 (주의!)
+        # 또는 각 테이블의 모든 레코드를 삭제하는 함수를 db_manager에 만들 수 있음
+        deleted_master = False
+        deleted_shared = False
+        if os.path.exists(db_manager.PROJECT_MASTER_DB_PATH):
+            os.remove(db_manager.PROJECT_MASTER_DB_PATH)
+            db_manager.init_project_master_db() # 빈 DB 파일 및 테이블 재생성
+            deleted_master = True
+            logger.info(f"{db_manager.PROJECT_MASTER_DB_PATH} deleted and re-initialized.")
+
+        if os.path.exists(db_manager.AGENT_SHARED_DB_PATH):
+            os.remove(db_manager.AGENT_SHARED_DB_PATH)
+            db_manager.init_agent_shared_db() # 빈 DB 파일 및 테이블 재생성
+            deleted_shared = True
+            logger.info(f"{db_manager.AGENT_SHARED_DB_PATH} deleted and re-initialized.")
+
+        if deleted_master or deleted_shared:
+            return {"success": True, "message": "All database data has been cleared and databases re-initialized."}
+        else:
+            return {"success": True, "message": "No database files found to clear."}
+
     except Exception as e:
-        logger.error(f"태스크 상세 정보 조회 실패: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"데이터 초기화 실패 (mcp_server - DB): {str(e)}")
+        return {"success": False, "error": f"Failed to clear database data: {str(e)}"}
 
 # 함수 매핑
 TOOL_FUNCTIONS = {
@@ -347,7 +550,8 @@ TOOL_FUNCTIONS = {
     "update_task": update_task,
     "delete_task": delete_task,
     "list_requests": list_requests,
-    "open_task_details": open_task_details
+    "open_task_details": open_task_details,
+    "clear_all_data": clear_all_data_wrapper
 }
 
 # API 엔드포인트 및 요청/응답 모델
@@ -640,9 +844,35 @@ async def mcp_endpoint(websocket: WebSocket):
     """MCP 전용 WebSocket 연결을 처리합니다."""
     await websocket_endpoint(websocket)
 
-def start_server(host: str = "0.0.0.0", port: int = 8082):
-    """서버를 시작합니다."""
-    uvicorn.run(app, host=host, port=port)
+def start_server(host: str = "0.0.0.0", port: int = 8082, config: Optional[Dict[str, Any]] = None) -> None:
+    """
+    MCP 서버 시작
+    
+    Args:
+        host: 호스트 (기본값: "0.0.0.0")
+        port: 포트 (기본값: 8082)
+        config: 설정 (기본값: None)
+    """
+    # MCP API 생성
+    mcp_api = create_mcp_api(config)
+    
+    # API 앱 가져오기
+    api_app = mcp_api.api_app
+    
+    # API 앱 시작
+    logger.info(f"PMAgent MCP 서버를 시작합니다 (http://{host}:{port})")
+    uvicorn.run(api_app, host=host, port=port)
 
+# 서버 실행 (uvicorn 직접 사용)
 if __name__ == "__main__":
-    start_server() 
+    # start_server() 함수를 사용하거나 아래처럼 직접 uvicorn.run 호출
+    # start_server(host="0.0.0.0", port=8083)
+    
+    logger.info(f"pmagent.mcp_server 직접 실행: Uvicorn으로 FastAPI 앱 (app) 실행 준비...")
+    uvicorn.run(
+        "pmagent.mcp_server:app", 
+        host="0.0.0.0", 
+        port=8083, 
+        reload=True, # 개발 중에는 reload=True가 유용
+        log_level="info" # Uvicorn 자체 로그 레벨 설정
+    ) 
