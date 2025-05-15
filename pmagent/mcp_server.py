@@ -701,14 +701,18 @@ async def jsonrpc_endpoint(request: Request):
             "id": data.get("id") if "id" in data else None
         })
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 @app.get("/smithery-simple.json")
 async def get_smithery_simple():
     """Smithery 호환 서버 메타데이터를 반환합니다."""
     return JSONResponse(content={
         "name": "PMAgent MCP Server",
-        "description": "프로젝트 관리를 위한 MCP(Model Context Protocol) 서버",
+        "description": "Enable collaborative project management by integrating multiple AI agents with external tools like Unity, GitHub, and Figma through a unified MCP server. Facilitate seamless coordination among project managers, designers, developers, and AI engineers to streamline project workflows. Enhance productivity by automating interactions with diverse external resources and APIs.",
         "version": "0.1.0",
-        "tools": [tool["name"] for tool in TOOLS],
+        "tools": TOOLS,  # TOOLS 변수 전체를 사용하도록 변경
         "authorization": {
             "type": "none"
         }
@@ -876,7 +880,3 @@ if __name__ == "__main__":
         reload=True, # 개발 중에는 reload=True가 유용
         log_level="info" # Uvicorn 자체 로그 레벨 설정
     ) 
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}
