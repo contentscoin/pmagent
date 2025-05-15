@@ -15,6 +15,7 @@ import logging
 import socket
 import psutil # psutil 임포트
 from dotenv import load_dotenv
+import uvicorn
 
 # 환경 변수 로드
 load_dotenv()
@@ -122,12 +123,13 @@ def main():
         os.environ["DATA_DIR"] = args.data_dir
 
     # 서버 시작 전 포트 확인 및 프로세스 정리
-    check_and_kill_process_on_port(args.host, args.port)
+    # logger.info(f"포트 {args.port} 사용 가능 여부 확인 중...")
+    # check_and_kill_process_on_port(args.host, args.port)
     
     # 서버 시작
     try:
         logger.info(f"PMAgent MCP 서버를 시작합니다 (http://{args.host}:{args.port})")
-        start_server(host=args.host, port=args.port)
+        uvicorn.run(start_server, host=args.host, port=args.port)
     except KeyboardInterrupt:
         logger.info("서버가 종료되었습니다.")
     except Exception as e:
