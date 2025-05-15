@@ -876,3 +876,7 @@ if __name__ == "__main__":
         reload=True, # 개발 중에는 reload=True가 유용
         log_level="info" # Uvicorn 자체 로그 레벨 설정
     ) 
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
