@@ -890,11 +890,16 @@ if __name__ == "__main__":
     # start_server() 함수를 사용하거나 아래처럼 직접 uvicorn.run 호출
     # start_server(host="0.0.0.0", port=8083)
     
-    logger.info(f"pmagent.mcp_server 직접 실행: Uvicorn으로 FastAPI 앱 (app) 실행 준비...")
+    # Koyeb 환경을 고려하여 PORT 환경 변수 사용
+    app_port = int(os.environ.get("PORT", 8080)) # Koyeb은 보통 PORT 환경변수를 주입, 기본값 8080
+    # 로컬 개발 시에는 다른 포트(예: 8083)를 사용하고 싶다면 아래와 같이 할 수도 있습니다.
+    # app_port = int(os.environ.get("PORT", 8083 if os.environ.get("KOYEB_RUNTIME_VERSION") is None else 8080))
+
+    logger.info(f"pmagent.mcp_server 직접 실행: Uvicorn으로 FastAPI 앱 (app) 실행 준비... 호스트: 0.0.0.0, 포트: {app_port}")
     uvicorn.run(
         "pmagent.mcp_server:app", 
         host="0.0.0.0", 
-        port=8083, 
-        reload=True, # 개발 중에는 reload=True가 유용
+        port=app_port, 
+        reload=False, # 프로덕션 또는 배포 환경에서는 False 권장
         log_level="info" # Uvicorn 자체 로그 레벨 설정
     ) 
