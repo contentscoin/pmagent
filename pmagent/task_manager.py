@@ -324,82 +324,75 @@ class TaskManager:
             }
     
     def mark_task_done(self, request_id: str, task_id: str, agent_id: str, completed_details: Optional[str] = None) -> Dict[str, Any]:
-        """특정 에이전트가 작업을 완료 상태로 표시합니다."""
-        # agent_id 파라미터 추가 및 유효성 검사
-        if not agent_id:
-            raise ValueError("agent_id is required to mark a task as done.")
-            
-        if request_id not in self.requests:
-            raise ValueError(f"존재하지 않는 요청 ID: {request_id}")
-        
-        if task_id not in self.tasks:
-            raise ValueError(f"존재하지 않는 태스크 ID: {task_id}")
-        
-        task = self.tasks[task_id]
-        
-        if task["requestId"] != request_id:
-            raise ValueError(f"태스크 {task_id}는 요청 {request_id}에 속하지 않습니다.")
+        """특정 에이전트가 작업을 완료했음을 표시하고, 완료 세부 정보를 기록합니다."""
+        logger.info(f"mark_task_done 호출됨: requestId={request_id}, taskId={task_id}, agentId={agent_id}")
 
-        # 할당된 에이전트 확인
-        assigned_agent = task.get("assignedAgentId")
-        if assigned_agent is None:
-            logger.warning(f"Task {task_id} is being marked done by agent {agent_id}, but it was not assigned to any agent.")
-            # 할당되지 않은 작업은 완료시킬 수 없도록 처리 (정책에 따라 변경 가능)
-            return {
-                "success": False,
-                "message": f"Task {task_id} is not assigned to any agent. Cannot mark as done.",
-                "task": task,
-                "tasksProgress": self._get_tasks_progress(request_id)
-            }
-        elif assigned_agent != agent_id:
-            return {
-                "success": False,
-                "message": f"Task {task_id} is assigned to agent {assigned_agent}, not {agent_id}. Cannot mark as done.",
-                "task": task,
-                "tasksProgress": self._get_tasks_progress(request_id)
-            }
-            
-        # 상태 전이 확인 (ASSIGNED 또는 PENDING 상태에서 DONE으로) -> PENDING 상태도 assigned_agent_id 체크를 통과했다면,
-        # 이는 get_next_task를 거치지 않고 바로 mark_task_done을 시도하는 예외적인 경우일 수 있으나,
-        # 현재 로직 상 assigned_agent_id가 설정되려면 ASSIGNED 상태가 되었어야 함.
-        # 따라서 PENDING 상태면서 assigned_agent_id가 있는 경우는 현재 로직 흐름상 발생하기 어려움.
-        # 보다 엄격하게는 ASSIGNED 상태에서만 DONE으로 변경 가능하게 할 수 있음.
-        if task["status"] != TASK_STATUS_ASSIGNED: # ASSIGNED 상태에서만 완료 가능하도록 변경
-             if task["status"] == TASK_STATUS_DONE:
-                 # 이미 완료된 경우, 성공으로 간주하고 현재 상태 반환 (멱등성)
-                 logger.info(f"Task {task_id} is already done.")
-                 return {
-                     "success": True, 
-                     "message": "Task is already marked as done.",
-                     "task": task,
-                     "tasksProgress": self._get_tasks_progress(request_id)
-                 }
-             else:
-                 # 다른 상태(예: APPROVED)에서는 완료 처리 불가
-                 return {
-                     "success": False,
-                     "message": f"Cannot mark task as done from status {task['status']}.",
-                     "task": task,
-                     "tasksProgress": self._get_tasks_progress(request_id)
-                 }
+        if not agent_id:
+            logger.error("agent_id가 제공되지 않았습니다.")
+            raise ValueError("agent_id는 작업을 완료하기 위해 필수입니다.")
+
+        if request_id not in self.requests:
+            logger.error(f"존재하지 않는 요청 ID: {request_id}")
+            raise ValueError(f"존재하지 않는 요청 ID: {request_id}")
+
+        if task_id not in self.tasks:
+            logger.error(f"존재하지 않는 태스크 ID: {task_id}")
+            raise ValueError(f"존재하지 않는 태스크 ID: {task_id}")
+
+        task_data = self.tasks[task_id]
+
+        # 작업이 해당 요청에 속하는지 확인
+        if task_data.get("requestId") != request_id:
+            logger.error(f"태스크 {task_id}가 요청 {request_id}에 속하지 않습니다.")
+            raise ValueError(f"태스크 {task_id}가 요청 {request_id}에 속하지 않습니다.")
+
+        # 이미 완료되었거나 승인된 작업인지 확인
+        if task_data["status"] == TASK_STATUS_DONE:
+            logger.warning(f"태스크 {task_id}는 이미 완료되었습니다.")
+            return {"message": f"태스크 {task_id}는 이미 완료되었습니다.", "status": task_data["status"]}
+        if task_data["status"] == TASK_STATUS_APPROVED:
+            logger.warning(f"태스크 {task_id}는 이미 승인되었습니다.")
+            return {"message": f"태스크 {task_id}는 이미 승인되었으며, 더 이상 변경할 수 없습니다.", "status": task_data["status"]}
+
+
+        # 작업이 'ASSIGNED' 상태인지 확인
+        if task_data["status"] != TASK_STATUS_ASSIGNED:
+            logger.error(f"태스크 {task_id}는 현재 {task_data['status']} 상태이므로 완료할 수 없습니다. 먼저 할당되어야 합니다.")
+            raise ValueError(f"태스크 {task_id}는 현재 {task_data['status']} 상태이므로 완료할 수 없습니다. 먼저 할당되어야 합니다.")
         
-        # 태스크 완료 처리
-        now = datetime.now().isoformat()
-        task["status"] = TASK_STATUS_DONE
-        task["completedAt"] = now
-        task["updatedAt"] = now
-        task["completedDetails"] = completed_details or ""
-        # 완료 시 할당된 에이전트 정보는 유지할 수도, 초기화할 수도 있음 (여기서는 유지)
-        # task["assignedAgentId"] = None 
+        # 할당된 에이전트와 현재 에이전트가 일치하는지 확인
+        if task_data["assignedAgentId"] != agent_id:
+            logger.error(f"태스크 {task_id}는 에이전트 {task_data['assignedAgentId']}에게 할당되었지만, 에이전트 {agent_id}가 완료하려고 시도했습니다.")
+            raise ValueError(f"태스크 {task_id}는 다른 에이전트에게 할당되었습니다.")
+
+        task_data["status"] = TASK_STATUS_DONE
+        task_data["completedAt"] = datetime.now().isoformat()
+        task_data["completedDetails"] = completed_details
+        task_data["updatedAt"] = task_data["completedAt"]
         
+        self.tasks[task_id] = task_data # 변경된 태스크 정보 업데이트
         self._save_data()
         
-        return {
-            "success": True,
-            "message": "태스크가 완료 처리되었습니다.",
-            "task": task,
-            "tasksProgress": self._get_tasks_progress(request_id)
-        }
+        logger.info(f"태스크 {task_id} 완료됨: {completed_details}")
+        
+        # 요청의 모든 태스크가 완료되었는지 확인하고, 그렇다면 요청 상태 변경
+        all_tasks_done_or_approved = True
+        request_tasks = self.requests[request_id].get("tasks", [])
+        if not request_tasks: # 태스크가 없는 요청은 바로 완료 처리될 수 없음
+            all_tasks_done_or_approved = False
+
+        for tid in request_tasks:
+            if tid in self.tasks and self.tasks[tid]["status"] not in [TASK_STATUS_DONE, TASK_STATUS_APPROVED]:
+                all_tasks_done_or_approved = False
+                break
+        
+        if all_tasks_done_or_approved and request_tasks: # 태스크가 있는 경우에만
+            self.requests[request_id]["status"] = "COMPLETED" # 요청의 모든 태스크가 완료되면 요청 상태 변경
+            self.requests[request_id]["updatedAt"] = datetime.now().isoformat()
+            logger.info(f"요청 {request_id}의 모든 태스크가 완료되어 요청 상태가 COMPLETED로 변경됨")
+            self._save_data()
+
+        return {"message": f"태스크 {task_id}가 완료되었습니다.", "status": task_data["status"]}
     
     def approve_task_completion(self, request_id: str, task_id: str) -> Dict[str, Any]:
         """완료된 태스크를 승인합니다."""
@@ -756,19 +749,18 @@ class TaskManager:
         
         return tasks_progress
 
-    def clear_all_data(self) -> Dict[str, Any]:
-        """모든 요청 및 태스크 데이터를 초기화합니다."""
-        try:
-            self.requests = {}
-            self.tasks = {}
-            # 파일에도 빈 객체 저장
-            save_requests(self.requests)
-            save_tasks(self.tasks)
-            logger.info("모든 요청 및 태스크 데이터가 초기화되었습니다.")
-            return {"success": True, "message": "All request and task data has been cleared."}
-        except Exception as e:
-            logger.error(f"데이터 초기화 중 오류 발생: {str(e)}")
-            return {"success": False, "error": f"Failed to clear data: {str(e)}"}
+    def _internal_clear_all_data(self) -> Dict[str, Any]:
+        """
+        모든 요청 및 태스크 데이터를 초기화하고,
+        파일을 비우고 메모리 내 객체도 초기화합니다.
+        (내부용 메서드로 이름 변경)
+        """
+        self.requests = {}
+        self.tasks = {}
+        save_requests(self.requests)
+        save_tasks(self.tasks)
+        logger.info("TaskManager: 모든 데이터가 내부적으로 초기화되었습니다.")
+        return {"success": True, "message": "모든 데이터가 내부적으로 성공적으로 초기화되었습니다."}
 
 # 전역 태스크 관리자 인스턴스
 task_manager = TaskManager() 

@@ -112,7 +112,7 @@ TOOLS = [
         "parameters": {
             "requestId": "요청 ID",
             "taskId": "태스크 ID",
-            "agentId": "작업을 완료하는 에이전트 ID",
+            "agentId": "작업을 완료하는 에이전트 ID (필수)",
             "completedDetails": "완료 상세 정보 (선택)"
         }
     },
@@ -329,24 +329,34 @@ def get_next_task(params: Dict[str, Any]): # 타입 힌트 명시
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 def mark_task_done(params: Dict[str, Any]): # 타입 힌트 명시
-    """태스크를 완료 상태로 표시합니다."""
+    """태스크를 완료 상태로 표시합니다. task_manager.mark_task_done()을 호출합니다."""
+    request_id = params.get("requestId")
+    task_id = params.get("taskId")
+    agent_id = params.get("agentId") # /invoke에서 이미 존재 유무 확인됨
+
+    if not request_id:
+        # 이 오류는 /invoke의 일반 ValueError 핸들러에 의해 HTTP 400으로 변환됩니다.
+        raise ValueError("requestId 파라미터가 필요합니다.")
+    if not task_id:
+        raise ValueError("taskId 파라미터가 필요합니다.")
+    # agent_id 자체의 값 (예: 빈 문자열)에 대한 유효성 검사는 task_manager에서 수행
+
     try:
-        if "requestId" not in params:
-            raise ValueError("요청 ID가 필요합니다.")
-        if "taskId" not in params:
-            raise ValueError("태스크 ID가 필요합니다.")
-        if "agentId" not in params:
-            raise ValueError("agentId가 필요합니다.")
-            
+        # global_task_manager.mark_task_done은 성공 시 dict를 반환하고, 실패 시 ValueError를 발생시킴
         return global_task_manager.mark_task_done(
-            request_id=params["requestId"],
-            task_id=params["taskId"],
-            agent_id=params["agentId"],
+            request_id=request_id,
+            task_id=task_id,
+            agent_id=agent_id,
             completed_details=params.get("completedDetails")
         )
+    except ValueError as ve:
+        # task_manager에서 발생한 ValueError를 HTTP 400으로 변환하여 클라이언트에게 전달
+        logger.error(f"mark_task_done 처리 중 ValueError (mcp_server wrapper): {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        logger.error(f"태스크 완료 처리 실패: {str(e)}")
-        return {"success": False, "error": str(e)}
+        # 기타 예상치 못한 오류는 HTTP 500으로 처리
+        logger.error(f"mark_task_done 처리 중 예외 발생 (mcp_server wrapper): {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error marking task done: {str(e)}")
 
 def approve_task_completion(params):
     """완료된 태스크를 승인합니다."""
@@ -453,42 +463,16 @@ def delete_task(params):
         logger.error(f"태스크 삭제 실패: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
-def list_requests(params):
-    """모든 요청 목록을 가져옵니다."""
+def list_requests(params: Dict[str, Any]): # params 인자 추가 및 타입 힌트
+    """모든 요청 목록을 가져옵니다. task_manager.list_requests()를 호출합니다."""
     try:
-        # 요청 목록 조회
-        requests_data = global_task_manager.requests
-        requests_list = []
-        
-        # 각 요청의 요약 정보 생성
-        for request_id, request_info in requests_data.items():
-            # 요청에 속한 태스크 정보 조회
-            task_count = len(request_info.get("tasks", []))
-            completed_count = 0
-            
-            # 완료된 태스크 수 계산
-            for task_id in request_info.get("tasks", []):
-                task_info = global_task_manager.tasks.get(task_id)
-                if task_info.get("status") == "COMPLETED":
-                    completed_count += 1
-            
-            # 요약 정보 추가
-            request_summary = {
-                "id": request_id,
-                "originalRequest": request_info.get("originalRequest", ""),
-                "status": request_info.get("status", "UNKNOWN"),
-                "createdAt": request_info.get("createdAt", ""),
-                "updatedAt": request_info.get("updatedAt", ""),
-                "taskCount": task_count,
-                "completedCount": completed_count,
-                "progress": f"{completed_count}/{task_count}"
-            }
-            requests_list.append(request_summary)
-        
-        return {"success": True, "requests": requests_list, "count": len(requests_list)}
+        # global_task_manager.list_requests()는 인자를 받지 않음
+        return global_task_manager.list_requests()
     except Exception as e:
-        logger.error(f"요청 목록 조회 실패: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"요청 목록 조회 실패 (mcp_server wrapper): {str(e)}", exc_info=True)
+        # task_manager.list_requests()가 실패할 경우 예외를 발생시키도록 하고,
+        # 여기서는 그것을 HTTP 500 오류로 변환하여 클라이언트에 알립니다.
+        raise HTTPException(status_code=500, detail=f"Error listing requests: {str(e)}")
 
 def open_task_details(params: Dict[str, Any]): # 타입 힌트 명시
     """태스크 상세 정보를 가져옵니다."""
@@ -540,7 +524,7 @@ def clear_all_data_wrapper(params):
         return {"success": False, "error": f"Failed to clear database data: {str(e)}"}
 
 # 함수 매핑
-TOOL_FUNCTIONS = {
+TOOL_HANDLERS = {
     "request_planning": request_planning,
     "get_next_task": get_next_task,
     "mark_task_done": mark_task_done,
@@ -567,7 +551,7 @@ class ToolInvocation(BaseModel):
 @app.post("/invoke")
 async def invoke_tool(invocation: ToolInvocation):
     """MCP 도구를 호출합니다."""
-    if invocation.name not in TOOL_FUNCTIONS:
+    if invocation.name not in TOOL_HANDLERS:
         raise HTTPException(status_code=404, detail=f"도구를 찾을 수 없음: {invocation.name}")
     
     try:
@@ -583,13 +567,47 @@ async def invoke_tool(invocation: ToolInvocation):
             for i, task in enumerate(parameters["tasks"]):
                 logger.info(f"task[{i}] 타입: {type(task)}")
         
-        result = TOOL_FUNCTIONS[invocation.name](parameters)
-        return result
-    except HTTPException as e:
+        # 선택된 도구 실행
+        if invocation.name in TOOL_HANDLERS:
+            handler = TOOL_HANDLERS[invocation.name]
+            
+            # mark_task_done 호출 시 agentId 누락 체크 (이 부분은 유지)
+            if invocation.name == "mark_task_done":
+                if "agentId" not in invocation.parameters or not invocation.parameters["agentId"]:
+                    logger.error(f"Tool {invocation.name} 호출 시 필수 파라미터 'agentId' 누락")
+                    raise HTTPException(status_code=400, detail="'agentId' is a required parameter for mark_task_done.")
+            
+            # 모든 핸들러는 invocation.parameters (딕셔너리 자체)를 인자로 받도록 통일
+            # 이전의 hasattr(global_task_manager, ...) 조건 분기 제거
+            result = handler(invocation.parameters)
+        else:
+            logger.error(f"알 수 없는 도구: {invocation.name}")
+            raise HTTPException(status_code=404, detail=f"Tool {invocation.name} not found")
+        
+        return {"result": result}
+    
+    except ValueError as e:
+        logger.error(f"도구 실행 중 값 오류 발생 ({invocation.name}): {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except KeyError as e:
+        logger.error(f"도구 실행 중 키 오류 발생 ({invocation.name}): {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Missing parameter: {str(e)}")
+    except TypeError as e:
+        # TypeError: some_method() missing 1 required positional argument: 'some_arg'
+        # 와 같은 오류 메시지를 파싱하여 사용자에게 더 친절한 메시지 제공 가능
+        error_message = str(e)
+        if "required positional argument" in error_message:
+            missing_arg = error_message.split("'")[-2]
+            error_detail = f"Missing required parameter: '{missing_arg}' for tool '{invocation.name}'."
+        else:
+            error_detail = f"Type error during tool execution ({invocation.name}): {error_message}"
+        logger.error(error_detail)
+        raise HTTPException(status_code=400, detail=error_detail)
+    except HTTPException as e: # 이미 HTTPException인 경우 그대로 전달
         raise e
     except Exception as e:
-        logger.error(f"도구 호출 실패({invocation.name}): {str(e)}")
-        raise HTTPException(status_code=500, detail=f"도구 호출 실패: {str(e)}")
+        logger.error(f"도구 실행 중 예기치 않은 오류 발생 ({invocation.name}): {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error during tool execution: {str(e)}")
 
 # JSON-RPC 응답 모델
 class JsonRpcRequest(BaseModel):
@@ -661,7 +679,7 @@ async def jsonrpc_endpoint(request: Request):
             logger.warning(f"params 처리 불가: {params}")
         
         # 메소드 확인
-        if method not in TOOL_FUNCTIONS:
+        if method not in TOOL_HANDLERS:
             return JSONResponse(content={
                 "jsonrpc": "2.0",
                 "error": {
@@ -673,7 +691,7 @@ async def jsonrpc_endpoint(request: Request):
         
         # 도구 호출
         logger.info(f"도구 호출: {method}, params={params}")
-        result = TOOL_FUNCTIONS[method](params)
+        result = TOOL_HANDLERS[method](params)
         
         # 응답 반환
         return JSONResponse(content={
@@ -795,7 +813,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.warning(f"params 처리 불가: {params}")
                 
                 # 메소드 확인
-                if method not in TOOL_FUNCTIONS:
+                if method not in TOOL_HANDLERS:
                     await websocket.send_json({
                         "jsonrpc": "2.0",
                         "error": {
@@ -808,7 +826,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 # 도구 호출
                 logger.info(f"도구 호출: {method}, params={params}")
-                result = TOOL_FUNCTIONS[method](params)
+                result = TOOL_HANDLERS[method](params)
                 
                 # 응답 전송
                 await websocket.send_json({
