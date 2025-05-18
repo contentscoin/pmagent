@@ -11,7 +11,11 @@
     "build": "echo 'Building PMAgent MCP Server'",
     "update-smithery": "node register_smithery.js",
     "test:client": "node test_client.js",
+    "test:mcp": "node direct_client_test.js",
+    "test:mcp:local": "node direct_client_test.js --local",
     "smithery:register": "node register_smithery.js",
+    "smithery:reinstall": "node register_smithery.js --reinstall",
+    "smithery:local": "node register_smithery.js --local",
     "server:python": "python -m pmagent.server",
     "smithery:test": "node smithery_client_test.js",
     "direct:test": "node direct_client_test.js"

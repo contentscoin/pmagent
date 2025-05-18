@@ -115,3 +115,62 @@ AI 기능 및 모델을 통합합니다.
 ## 라이센스
 
 MIT
+
+## 설정 파일
+
+프로젝트의 모든 설정은 `config.json` 파일에 통합되어 있습니다:
+
+```json
+{
+  "url": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
+  "apiKey": "0c8f6386-e443-4b8b-95ba-22a40d5f5e38",
+  "mcpUrl": "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp",
+  "localUrl": "http://localhost:4000/api/mcp",
+  "environments": {
+    "production": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
+    "local": "http://localhost:4000/api/mcp"
+  },
+  "client": {
+    // MCP 클라이언트 설정...
+  }
+}
+```
+
+### MCP 서버 테스트
+
+MCP 서버를 테스트하려면 다음 명령을 사용하세요:
+
+```bash
+# 프로덕션 서버 테스트
+npm run test:mcp
+
+# 로컬 서버 테스트
+npm run test:mcp:local
+```
+
+이 스크립트는 MCP 서버에 연결하여 다음 작업을 수행합니다:
+1. 서버 정보 확인
+2. 사용 가능한 도구 목록 가져오기
+3. 프로젝트 목록 가져오기
+4. 테스트 프로젝트 및 태스크 생성
+
+## Smithery 설정 및 등록
+
+PMAgent MCP Server를 Cursor에 등록하려면 다음 명령을 사용하세요:
+
+```bash
+# 기본 등록
+npm run smithery:register
+
+# 로컬 서버 모드로 등록
+npm run smithery:local
+
+# 기존 설치 제거 후 재설치
+npm run smithery:reinstall
+```
+
+추가 옵션은 다음 명령으로 확인할 수 있습니다:
+
+```bash
+node register_smithery.js --help
+```

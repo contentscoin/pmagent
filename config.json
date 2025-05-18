@@ -1,4 +1,60 @@
 {
   "url": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
-  "key": "0c8f6386-e443-4b8b-95ba-22a40d5f5e38"
+  "apiKey": "0c8f6386-e443-4b8b-95ba-22a40d5f5e38",
+  "mcpUrl": "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp",
+  "localUrl": "http://localhost:4000/api/mcp",
+  "environments": {
+    "production": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
+    "local": "http://localhost:4000/api/mcp"
+  },
+  "client": {
+    "server": {
+      "name": "pmagent",
+      "url": "https://pmagent.vercel.app/api",
+      "transport": "jsonrpc",
+      "tools": [
+        "list_projects",
+        "create_project",
+        "get_project",
+        "update_project",
+        "delete_project", 
+        "list_tasks",
+        "create_task",
+        "get_task",
+        "update_task",
+        "delete_task"
+      ]
+    },
+    "agents": {
+      "pm": {
+        "name": "PM Agent",
+        "description": "프로젝트 관리 에이전트",
+        "tools": ["create_project", "assign_task", "get_project_status"]
+      },
+      "designer": {
+        "name": "Designer Agent",
+        "description": "디자인 작업을 수행하는 에이전트",
+        "tools": ["get_project_status"]
+      },
+      "frontend": {
+        "name": "Frontend Agent",
+        "description": "프론트엔드 개발 작업을 수행하는 에이전트",
+        "tools": ["get_project_status"]
+      },
+      "backend": {
+        "name": "Backend Agent",
+        "description": "백엔드 개발 작업을 수행하는 에이전트",
+        "tools": ["get_project_status"]
+      },
+      "ai_engineer": {
+        "name": "AI Engineer Agent",
+        "description": "AI 모델 개발 및 통합 작업을 수행하는 에이전트",
+        "tools": ["get_project_status"]
+      }
+    },
+    "auth": {
+      "enabled": false,
+      "type": "bearer"
+    }
+  }
 }

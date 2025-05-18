@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "baseUrl": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
   "apiVersion": "1.0",
+  "apiKey": "0c8f6386-e443-4b8b-95ba-22a40d5f5e38",
+  "endpoints": {
+    "production": "/mcp",
+    "local": "/api/mcp"
+  },
   "transport": {
     "type": "http",
     "jsonrpc": {
