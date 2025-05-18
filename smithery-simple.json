@@ -3,7 +3,7 @@
   "displayName": "PM Agent MCP Server",
   "description": "Project Management MCP Server",
   "version": "0.1.0",
-  "baseUrl": "https://pmagent.vercel.app/",
+  "baseUrl": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
   "apiVersion": "1.0",
   "transport": {
     "type": "http",
