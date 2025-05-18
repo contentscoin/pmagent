@@ -542,7 +542,16 @@ TOOL_HANDLERS = {
 @app.get("/tools")
 async def get_tools():
     """MCP 도구 목록을 반환합니다."""
-    return {"tools": TOOLS}
+    logger.info("MCP get_tools: Request received.")
+    start_time = datetime.now()
+    
+    # 실제 작업은 매우 간단합니다.
+    tools_data = {"tools": TOOLS}
+    
+    end_time = datetime.now()
+    duration = (end_time - start_time).total_seconds()
+    logger.info(f"MCP get_tools: Processing finished in {duration:.4f} seconds.")
+    return tools_data
 
 class ToolInvocation(BaseModel):
     name: str
