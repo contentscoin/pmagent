@@ -20,7 +20,7 @@ const smitheryJsonPath = path.join(__dirname, 'smithery-simple.json');
 let smitheryJson = JSON.parse(fs.readFileSync(smitheryJsonPath, 'utf8'));
 
 // baseUrl 업데이트 (사용자가 확인한 URL 사용)
-smitheryJson.baseUrl = "https://pmagent.vercel.app/";
+smitheryJson.baseUrl = "https://successive-glenn-contentscoin-34b6608c.koyeb.app";
 
 // 업데이트된 JSON 파일 저장 (스크립트 실행 시점에 baseUrl이 맞는지 확인)
 fs.writeFileSync(smitheryJsonPath, JSON.stringify(smitheryJson, null, 2), 'utf8');
