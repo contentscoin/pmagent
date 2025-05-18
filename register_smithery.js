@@ -199,7 +199,8 @@ if (!skipCursor) {
 // API 엔드포인트 테스트
 try {
   console.log('3. API 엔드포인트 테스트...');
-  const curlCmd = `curl -s -X POST "${smitheryJson.baseUrl}${smitheryJson.transport.jsonrpc.endpoint || ''}" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"rpc.discover","params":[],"id":1}'`;
+  // 올바른 MCP 엔드포인트로 테스트
+  const curlCmd = `curl -s -X POST "${SERVER_URL}" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"rpc.discover","params":[],"id":1}'`;
   console.log(`   테스트 명령: ${curlCmd}`);
   const curlOutput = execSync(curlCmd, { encoding: 'utf8' });
   console.log('   API 응답:', curlOutput.substring(0, 100) + '...');
@@ -208,10 +209,30 @@ try {
   console.log('   API 테스트가 실패했지만 등록을 계속 진행합니다.');
 }
 
+// 추가: 연결 설정 파일 직접 생성 (명확한 포맷으로)
+console.log('4. Smithery 연결 설정 직접 생성...');
+const homedir = os.homedir();
+const CONNECTION_FILE = path.join(homedir, '.smithery', 'connections.json');
+
+// 연결 설정 파일 생성
+fs.writeFileSync(
+  CONNECTION_FILE,
+  JSON.stringify({
+    "@contentscoin/pmagent": {
+      "url": SERVER_URL,
+      "apiKey": API_KEY
+    }
+  }, null, 2),
+  'utf8'
+);
+console.log(`   연결 설정 파일 생성됨: ${CONNECTION_FILE}`);
+
 // Smithery CLI로 등록
 try {
-  console.log('4. Smithery 서버 등록 중...');
-  const command = `npx -y @smithery/cli@latest install ${PACKAGE_NAME} --client cursor`;
+  console.log('5. Smithery 서버 등록 중...');
+  
+  // 직접 서버 URL과 API 키를 명령어에 포함
+  const command = `npx -y @smithery/cli@latest install ${PACKAGE_NAME} --url "${SERVER_URL}" --api-key "${API_KEY}" --client cursor`;
   
   console.log(`   실행 명령: ${command}`);
   const output = execSync(command, { encoding: 'utf8' });
@@ -220,7 +241,7 @@ try {
   console.log('   ' + output.replace(/\n/g, '\n   '));
   
   // 등록 확인
-  console.log('5. 등록된 서버 목록 확인:');
+  console.log('6. 등록된 서버 목록 확인:');
   const listOutput = execSync('npx -y @smithery/cli@latest list servers --client cursor', { encoding: 'utf8' });
   console.log('   ' + listOutput.replace(/\n/g, '\n   '));
   
