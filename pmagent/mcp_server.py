@@ -624,104 +624,123 @@ class JsonRpcResponse(BaseModel):
 
 @app.get("/")
 async def root():
-    """서버 상태를 확인합니다."""
-    return {"status": "running", "message": "PMAgent MCP Server is running"}
+    """루트 엔드포인트는 서비스의 기본 정보를 반환합니다."""
+    return {"message": "Welcome to PMAgent MCP Server!", "version": app.version}
 
 @app.post("/")
 async def jsonrpc_endpoint(request: Request):
     """JSON-RPC 2.0 요청을 처리합니다."""
     try:
-        data = await request.json()
-        logger.info(f"JSON-RPC 요청 수신: {data}")
-        
-        # 필수 필드 확인
-        if "jsonrpc" not in data or data["jsonrpc"] != "2.0":
-            return JSONResponse(content={
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32600,
-                    "message": "잘못된 JSON-RPC 요청입니다."
-                },
-                "id": data.get("id")
-            })
-            
-        if "method" not in data:
-            return JSONResponse(content={
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32600,
-                    "message": "메소드가 지정되지 않았습니다."
-                },
-                "id": data.get("id")
-            })
-        
-        method = data["method"]
-        params = data.get("params", {})
-        request_id = data.get("id")
-        
-        # params 타입 확인 및 처리
-        logger.info(f"params 타입: {type(params)}")
-        
-        # JSON-RPC의 params가 리스트인 경우, 첫 번째 요소를 사용
-        if isinstance(params, list) and len(params) > 0:
-            params = params[0]
-            logger.info(f"리스트 params에서 첫 번째 요소 사용: {params}")
-        
-        # 딕셔너리 params에 대한 로깅
-        if isinstance(params, dict):
-            logger.info(f"딕셔너리 params 처리: {params}")
-            # tasks 키가 있고 그 값이 iterable인지 확인
-            if "tasks" in params and hasattr(params["tasks"], "__iter__"):
-                # 각 task가 딕셔너리인지 확인하고 로깅
-                for i, task in enumerate(params["tasks"]):
-                    logger.info(f"task[{i}] 타입: {type(task)}")
+        body = await request.json()
+        logger.debug(f"Received JSON-RPC request: {body}")
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON received for JSON-RPC endpoint")
+        return JSONResponse(
+            status_code=400,
+            content=JsonRpcResponse(
+                jsonrpc="2.0",
+                error={"code": -32700, "message": "Parse error"},
+                id=None
+            ).dict(exclude_none=True)
+        )
+
+    rpc_request = JsonRpcRequest(**body)
+
+    if rpc_request.method == "mcp.getTools":
+        tools_spec = await get_tools()
+        return JsonRpcResponse(
+            jsonrpc="2.0",
+            result=tools_spec,
+            id=rpc_request.id
+        )
+    elif rpc_request.method == "mcp.invokeTool":
+        if isinstance(rpc_request.params, list) and len(rpc_request.params) > 0:
+            # 파라미터가 리스트 형태일 경우, 첫 번째 요소를 사용 (일반적인 Smithery 형태)
+            tool_invocation_data = rpc_request.params[0]
+        elif isinstance(rpc_request.params, dict):
+            # 파라미터가 딕셔너리 형태일 경우 (직접 호출 등)
+            tool_invocation_data = rpc_request.params
         else:
-            logger.warning(f"params 처리 불가: {params}")
-        
-        # 메소드 확인
-        if method not in TOOL_HANDLERS:
-            return JSONResponse(content={
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32601,
-                    "message": f"메서드를 찾을 수 없음: {method}"
-                },
-                "id": request_id
-            })
-        
-        # 도구 호출
-        logger.info(f"도구 호출: {method}, params={params}")
-        result = TOOL_HANDLERS[method](params)
-        
-        # 응답 반환
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "result": result,
-            "id": request_id
-        })
-    except HTTPException as e:
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "error": {
-                "code": e.status_code,
-                "message": str(e.detail)
-            },
-            "id": data.get("id") if "id" in data else None
-        })
-    except Exception as e:
-        logger.error(f"JSON-RPC 요청 처리 실패: {str(e)}")
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32603,
-                "message": f"내부 오류: {str(e)}"
-            },
-            "id": data.get("id") if "id" in data else None
-        })
+            logger.error(f"Invalid params format for mcp.invokeTool: {rpc_request.params}")
+            return JSONResponse(
+                status_code=400,
+                content=JsonRpcResponse(
+                    jsonrpc="2.0",
+                    error={"code": -32602, "message": "Invalid params"},
+                    id=rpc_request.id
+                ).dict(exclude_none=True)
+            )
+
+        try:
+            invocation = ToolInvocation(**tool_invocation_data)
+            result = await invoke_tool(invocation)
+            # invoke_tool의 결과가 이미 JSONResponse 객체일 수 있음 (예: HTTPException 발생 시)
+            if isinstance(result, JSONResponse):
+                # 에러 응답의 경우, JSON-RPC 형식에 맞게 변환 시도
+                # 하지만 invoke_tool 내부에서 발생한 HTTPException은 이미 FastAPI에 의해 처리되므로
+                # 여기서는 invoke_tool이 정상적인 dict 또는 MCPError를 반환한다고 가정
+                # 만약 invoke_tool이 직접 JSONResponse를 반환하도록 수정했다면, 여기서 그 내용을 추출해야 함
+                # 지금은 invoke_tool이 dict나 MCPError를 반환한다고 가정하고 진행합니다.
+                # 지금은 간단히 result가 dict라고 가정합니다.
+                # 만약 result가 MCPError 객체라면:
+                # if isinstance(result, MCPError):
+                # return JsonRpcResponse(jsonrpc="2.0", error=result.to_dict(), id=rpc_request.id)
+                pass # 위에서 이미 처리되었거나, 아래에서 dict로 처리
+
+            # 결과가 JSONResponse가 아니면 (정상 결과 dict 또는 MCPError 객체),
+            # JsonRpcResponse로 감싸서 반환합니다.
+            if isinstance(result, dict) and result.get("error"): # MCPError.to_dict() 형태일 경우
+                 return JSONResponse(
+                    content=JsonRpcResponse(
+                        jsonrpc="2.0",
+                        error=result.get("error"), # MCPError.to_dict()의 error 부분을 사용
+                        id=rpc_request.id
+                    ).dict(exclude_none=True)
+                )
+            else:
+                return JsonRpcResponse(
+                    jsonrpc="2.0",
+                    result=result, # 정상 결과 (dict)
+                    id=rpc_request.id
+                )
+        except HTTPException as http_exc:
+            logger.error(f"HTTPException during invoke_tool via JSON-RPC: {http_exc.detail}")
+            return JSONResponse(
+                status_code=http_exc.status_code, # 원래 HTTP 상태 코드 유지
+                content=JsonRpcResponse(
+                    jsonrpc="2.0",
+                    error={"code": -32000, "message": f"Server error: {http_exc.detail}"},
+                    id=rpc_request.id
+                ).dict(exclude_none=True)
+            )
+        except Exception as e:
+            logger.exception(f"Unexpected error during mcp.invokeTool via JSON-RPC: {e}") # 스택 트레이스 포함 로깅
+            return JSONResponse(
+                status_code=500,
+                content=JsonRpcResponse(
+                    jsonrpc="2.0",
+                    error={"code": -32000, "message": f"Internal server error: {str(e)}"},
+                    id=rpc_request.id
+                ).dict(exclude_none=True)
+            )
+    else:
+        return JSONResponse(
+            status_code=400,
+            content=JsonRpcResponse(
+                jsonrpc="2.0",
+                error={"code": -32601, "message": "Method not found"},
+                id=rpc_request.id
+            ).dict(exclude_none=True)
+        )
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    """서버의 상태 및 DB 연결 상태를 확인합니다."""
+    db_connected = db_manager.check_db_connection()
+    if db_connected:
+        return JSONResponse(content={"status": "healthy", "database_connection": "ok"}, status_code=200)
+    else:
+        return JSONResponse(content={"status": "unhealthy", "database_connection": "failed"}, status_code=503)
 
 @app.get("/smithery-simple.json")
 async def get_smithery_simple():
@@ -887,19 +906,12 @@ def start_server(host: str = "0.0.0.0", port: int = 8082, config: Optional[Dict[
 
 # 서버 실행 (uvicorn 직접 사용)
 if __name__ == "__main__":
-    # start_server() 함수를 사용하거나 아래처럼 직접 uvicorn.run 호출
-    # start_server(host="0.0.0.0", port=8083)
-    
-    # Koyeb 환경을 고려하여 PORT 환경 변수 사용
     app_port = int(os.environ.get("PORT", 8080)) # Koyeb은 보통 PORT 환경변수를 주입, 기본값 8080
-    # 로컬 개발 시에는 다른 포트(예: 8083)를 사용하고 싶다면 아래와 같이 할 수도 있습니다.
-    # app_port = int(os.environ.get("PORT", 8083 if os.environ.get("KOYEB_RUNTIME_VERSION") is None else 8080))
-
     logger.info(f"pmagent.mcp_server 직접 실행: Uvicorn으로 FastAPI 앱 (app) 실행 준비... 호스트: 0.0.0.0, 포트: {app_port}")
     uvicorn.run(
-        "pmagent.mcp_server:app", 
-        host="0.0.0.0", 
-        port=app_port, 
-        reload=False, # 프로덕션 또는 배포 환경에서는 False 권장
-        log_level="info" # Uvicorn 자체 로그 레벨 설정
+        "pmagent.mcp_server:app",
+        host="0.0.0.0",
+        port=app_port,
+        reload=False,
+        log_level="info"
     ) 

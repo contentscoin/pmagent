@@ -282,6 +282,48 @@ def mark_agent_report_as_processed(report_id):
     finally:
         conn.close()
 
+def check_db_connection():
+    """
+    데이터베이스 연결을 확인합니다.
+    Project Master DB와 Agent Shared DB 모두에 연결을 시도합니다.
+    """
+    db_paths_to_check = {
+        "Project Master DB": PROJECT_MASTER_DB_PATH,
+        "Agent Shared DB": AGENT_SHARED_DB_PATH
+    }
+    all_connections_ok = True
+
+    for db_name, db_path in db_paths_to_check.items():
+        try:
+            # 데이터베이스 파일 존재 여부 먼저 확인
+            if not os.path.exists(db_path):
+                print(f"Database check: {db_name} file does not exist at {db_path}. Assuming new DB, will be created on init.")
+                # 파일이 없으면 연결 시도 시 자동으로 생성되므로, 여기서는 경고만 하고 넘어갈 수 있습니다.
+                # 또는 엄격하게 False를 반환할 수도 있습니다. 현재는 초기화 시 생성될 것을 가정합니다.
+                # all_connections_ok = False # 엄격하게 하려면 주석 해제
+                # break # 엄격하게 하려면 주석 해제
+                continue # 다음 DB 체크로 넘어감
+
+            conn = get_db_connection(db_path)
+            # 간단한 쿼리로 연결 활성 상태 확인 (선택 사항, connect 자체로도 확인 가능)
+            # cursor = conn.cursor()
+            # cursor.execute("SELECT 1")
+            conn.close()
+            print(f"Database check: Successfully connected to {db_name} at {db_path}.")
+        except sqlite3.Error as e:
+            print(f"Database check: Failed to connect to {db_name} at {db_path}. Error: {e}")
+            all_connections_ok = False
+            break # 하나의 DB라도 연결 실패하면 중단
+        except Exception as e:
+            print(f"Database check: An unexpected error occurred while checking {db_name} at {db_path}. Error: {e}")
+            all_connections_ok = False
+            break
+
+    if all_connections_ok:
+        print("Database connection check: All specified databases are accessible.")
+    else:
+        print("Database connection check: One or more database connections failed.")
+    return all_connections_ok
 
 if __name__ == '__main__':
     print(f"Data directory: {DATA_DIR}")
@@ -350,4 +392,9 @@ if __name__ == '__main__':
     #         print(f"Updated master task {task_id_1}: {get_master_task(task_id_1)}")
     #         print(f"Marked report {example_report_to_process['report_id']} as processed.")
 
-    # print("\nTest scenario finished.") 
+    # print("\nTest scenario finished.")
+
+    if check_db_connection():
+        print("Database connection is OK.")
+    else:
+        print("Failed to connect to the database.") 

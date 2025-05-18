@@ -136,9 +136,9 @@ def main():
         os.environ["DATA_DIR"] = args.data_dir
 
     # 서버 시작 전 포트 확인 및 프로세스 정리 (Koyeb 환경에서는 주석 처리 유지)
-    # if os.environ.get("KOYEB_APP_NAME") is None: # 로컬 환경에서만 실행하도록 조건 추가 가능
-    #    logger.info(f"로컬 환경에서 포트 {port_to_use} 사용 가능 여부 확인 중...")
-    #    check_and_kill_process_on_port(host_to_use, port_to_use)
+    if os.environ.get("KOYEB_APP_NAME") is None: # 로컬 환경에서만 실행하도록 조건 추가 가능
+       logger.info(f"로컬 환경에서 포트 {port_to_use} 사용 가능 여부 확인 중...")
+       check_and_kill_process_on_port(host_to_use, port_to_use)
     
     # 서버 시작
     try:
