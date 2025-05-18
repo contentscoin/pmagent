@@ -10,8 +10,6 @@
     "dev": "python server.py",
     "build": "echo 'Building PMAgent MCP Server'",
     "update-smithery": "node register_smithery.js",
-    "deploy": "vercel --prod",
-    "vercel-build": "echo 'Vercel 빌드 스크립트 실행 완료'",
     "test:client": "node test_client.js",
     "smithery:register": "node register_smithery.js",
     "server:python": "python -m pmagent.server",
@@ -42,7 +40,6 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0",
-    "vercel": "^33.7.1"
+    "nodemon": "^3.1.0"
   }
 }
