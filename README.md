@@ -159,7 +159,10 @@ npm run test:mcp:local
 PMAgent MCP Server를 Cursor에 등록하려면 다음 명령을 사용하세요:
 
 ```bash
-# 기본 등록
+# 간단한 스미더리 등록 (권장)
+npm run smithery:simple
+
+# 기존 방식의 등록
 npm run smithery:register
 
 # 로컬 서버 모드로 등록
@@ -167,10 +170,28 @@ npm run smithery:local
 
 # 기존 설치 제거 후 재설치
 npm run smithery:reinstall
+
+# 스미더리 설정 파일 제거 (문제 해결시)
+npm run smithery:clean
 ```
+
+만약 스크립트를 통한 방법이 실패한다면, `smithery_install_commands.txt` 파일에 있는 명령어를 터미널에서 직접 실행해보세요.
 
 추가 옵션은 다음 명령으로 확인할 수 있습니다:
 
 ```bash
 node register_smithery.js --help
 ```
+
+### 설정 파일
+
+- `config.json`: 메인 설정 파일로 URL과 API 키 정보를 포함합니다.
+- `smithery-simple.json`: Smithery 서버 상세 설정을 포함합니다.
+
+### 문제 해결
+
+스미더리 등록 중 "No connection configuration found" 오류가 발생하면 다음 단계를 시도하세요:
+
+1. 스미더리 설정 초기화: `npm run smithery:clean`
+2. 간단한 등록 스크립트 사용: `npm run smithery:simple`
+3. Cursor를 재시작한 후 스미더리가 정상적으로 표시되는지 확인

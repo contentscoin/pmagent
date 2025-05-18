@@ -16,6 +16,8 @@
     "smithery:register": "node register_smithery.js",
     "smithery:reinstall": "node register_smithery.js --reinstall",
     "smithery:local": "node register_smithery.js --local",
+    "smithery:simple": "node smithery-install-direct.js",
+    "smithery:clean": "rm -rf ~/.smithery/connections.json",
     "server:python": "python -m pmagent.server",
     "smithery:test": "node smithery_client_test.js",
     "direct:test": "node direct_client_test.js"

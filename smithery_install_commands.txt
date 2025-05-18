@@ -1,0 +1,43 @@
+# Smithery 설치 명령어 모음
+# 아래 명령어를 터미널에서 복사하여 순서대로 실행하세요
+
+# 1. 연결 설정 파일 생성
+mkdir -p ~/.smithery
+
+# connections.json 파일 생성
+cat > ~/.smithery/connections.json << EOF
+{
+  "@contentscoin/pmagent": {
+    "url": "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp",
+    "apiKey": "0c8f6386-e443-4b8b-95ba-22a40d5f5e38"
+  }
+}
+EOF
+
+# 2. Cursor 디렉토리에 서버 설정 추가
+mkdir -p ~/Library/Application\ Support/Cursor/smithery
+
+cat > ~/Library/Application\ Support/Cursor/smithery/servers.json << EOF
+{
+  "servers": {
+    "@contentscoin/pmagent": {
+      "url": "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp",
+      "apiKey": "0c8f6386-e443-4b8b-95ba-22a40d5f5e38"
+    }
+  }
+}
+EOF
+
+# 3. Smithery 서버 등록 (아래 명령어 중 하나를 실행하세요)
+
+# 방법 1: URL과 apiKey 명시
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --apiKey "0c8f6386-e443-4b8b-95ba-22a40d5f5e38" --client cursor
+
+# 방법 2: URL과 api-key 명시
+# npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --api-key "0c8f6386-e443-4b8b-95ba-22a40d5f5e38" --client cursor
+
+# 방법 3: 기본 명령
+# npx -y @smithery/cli@latest install @contentscoin/pmagent --client cursor
+
+# 4. 등록된 서버 목록 확인
+npx -y @smithery/cli@latest list servers --client cursor 
