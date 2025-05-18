@@ -639,9 +639,14 @@ async def root():
 @app.post("/")
 async def jsonrpc_endpoint(request: Request):
     """JSON-RPC 2.0 요청을 처리합니다."""
+    # 요청 정보 세부 로깅 추가
+    client_host = request.client.host if request.client else "unknown"
+    logger.info(f"JSON-RPC 요청 수신 - 클라이언트 IP: {client_host}, 헤더: {request.headers.get('user-agent', 'unknown')}")
+    
     try:
         body = await request.json()
-        logger.debug(f"Received JSON-RPC request: {body}")
+        # 디버그에서 INFO 레벨로 업그레이드하여 항상 로그에 기록되도록 함
+        logger.info(f"JSON-RPC 요청 내용: {body}")
     except json.JSONDecodeError:
         logger.error("Invalid JSON received for JSON-RPC endpoint")
         return JSONResponse(
@@ -656,7 +661,17 @@ async def jsonrpc_endpoint(request: Request):
     rpc_request = JsonRpcRequest(**body)
 
     if rpc_request.method == "mcp.getTools":
+        logger.info(f"mcp.getTools 메서드 호출 감지 - 요청 ID: {rpc_request.id}")
+        
+        # 시작 시간 기록
+        start_time = datetime.now()
         tools_spec = await get_tools()
+        # 종료 시간 기록 및 소요 시간 계산
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        
+        logger.info(f"mcp.getTools 처리 완료 - 소요 시간: {duration:.4f}초, 응답 크기: {len(str(tools_spec))} 바이트")
+        
         return JsonRpcResponse(
             jsonrpc="2.0",
             result=tools_spec,
