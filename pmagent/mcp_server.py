@@ -698,21 +698,10 @@ async def jsonrpc_endpoint(request: Request):
         try:
             invocation = ToolInvocation(**tool_invocation_data)
             result = await invoke_tool(invocation)
-            # invoke_tool의 결과가 이미 JSONResponse 객체일 수 있음 (예: HTTPException 발생 시)
+            
             if isinstance(result, JSONResponse):
-                # 에러 응답의 경우, JSON-RPC 형식에 맞게 변환 시도
-                # 하지만 invoke_tool 내부에서 발생한 HTTPException은 이미 FastAPI에 의해 처리되므로
-                # 여기서는 invoke_tool이 정상적인 dict 또는 MCPError를 반환한다고 가정
-                # 만약 invoke_tool이 직접 JSONResponse를 반환하도록 수정했다면, 여기서 그 내용을 추출해야 함
-                # 지금은 invoke_tool이 dict나 MCPError를 반환한다고 가정하고 진행합니다.
-                # 지금은 간단히 result가 dict라고 가정합니다.
-                # 만약 result가 MCPError 객체라면:
-                # if isinstance(result, MCPError):
-                # return JsonRpcResponse(jsonrpc="2.0", error=result.to_dict(), id=rpc_request.id)
                 pass # 위에서 이미 처리되었거나, 아래에서 dict로 처리
 
-            # 결과가 JSONResponse가 아니면 (정상 결과 dict 또는 MCPError 객체),
-            # JsonRpcResponse로 감싸서 반환합니다.
             if isinstance(result, dict) and result.get("error"): # MCPError.to_dict() 형태일 경우
                  return JSONResponse(
                     content=JsonRpcResponse(
@@ -757,6 +746,25 @@ async def jsonrpc_endpoint(request: Request):
             ).dict(exclude_none=True)
         )
 
+@app.get("/mcp")
+async def mcp_get_endpoint(request: Request):
+    """MCP 엔드포인트에 대한 GET 요청을 처리합니다."""
+    # 서버 정보 반환
+    server_info = {
+        "name": "PMAgent MCP Server",
+        "version": "0.1.0",
+        "description": "Enable collaborative project management through a unified MCP server",
+        "transport": {
+            "type": "jsonrpc",
+            "methods": ["mcp.getTools", "mcp.invokeTool", "rpc.discover"]
+        },
+        "tools": len(TOOLS),
+        "status": "online",
+        "documentation": "https://github.com/contentscoin/pmagent"
+    }
+    
+    return JSONResponse(content=server_info)
+
 @app.post("/mcp")
 async def mcp_jsonrpc_endpoint(request: Request):
     """Smithery 용 JSON-RPC 2.0 요청을 처리합니다. `/mcp` 경로로 노출됩니다."""
@@ -780,7 +788,37 @@ async def mcp_jsonrpc_endpoint(request: Request):
 
     rpc_request = JsonRpcRequest(**body)
 
-    if rpc_request.method == "mcp.getTools":
+    # rpc.discover 메서드 추가 - Smithery 연결에 필요
+    if rpc_request.method == "rpc.discover":
+        logger.info(f"MCP 경로 rpc.discover 메서드 호출 감지 - 요청 ID: {rpc_request.id}")
+        
+        # Smithery에 필요한 서버 정보를 반환
+        discover_result = {
+            "name": "PMAgent MCP Server",
+            "version": "0.1.0",
+            "description": "Enable collaborative project management through a unified MCP server",
+            "transport": {
+                "type": "jsonrpc",
+                "methods": {
+                    "mcp.getTools": {
+                        "description": "Get available tools"
+                    },
+                    "mcp.invokeTool": {
+                        "description": "Invoke a tool"
+                    },
+                    "rpc.discover": {
+                        "description": "Discover server capabilities"
+                    }
+                }
+            }
+        }
+        
+        return JsonRpcResponse(
+            jsonrpc="2.0",
+            result=discover_result,
+            id=rpc_request.id
+        )
+    elif rpc_request.method == "mcp.getTools":
         logger.info(f"MCP 경로 mcp.getTools 메서드 호출 감지 - 요청 ID: {rpc_request.id}")
         
         # 시작 시간 기록
@@ -805,7 +843,7 @@ async def mcp_jsonrpc_endpoint(request: Request):
             # 파라미터가 딕셔너리 형태일 경우 (직접 호출 등)
             tool_invocation_data = rpc_request.params
         else:
-            logger.error(f"MCP 경로: Invalid params format for mcp.invokeTool: {rpc_request.params}")
+            logger.error(f"Invalid params format for mcp.invokeTool: {rpc_request.params}")
             return JSONResponse(
                 status_code=400,
                 content=JsonRpcResponse(
@@ -837,7 +875,7 @@ async def mcp_jsonrpc_endpoint(request: Request):
                     id=rpc_request.id
                 )
         except HTTPException as http_exc:
-            logger.error(f"MCP 경로: HTTPException during invoke_tool via JSON-RPC: {http_exc.detail}")
+            logger.error(f"HTTPException during invoke_tool via JSON-RPC: {http_exc.detail}")
             return JSONResponse(
                 status_code=http_exc.status_code, # 원래 HTTP 상태 코드 유지
                 content=JsonRpcResponse(
@@ -847,7 +885,7 @@ async def mcp_jsonrpc_endpoint(request: Request):
                 ).dict(exclude_none=True)
             )
         except Exception as e:
-            logger.exception(f"MCP 경로: Unexpected error during mcp.invokeTool via JSON-RPC: {e}") # 스택 트레이스 포함 로깅
+            logger.exception(f"Unexpected error during mcp.invokeTool via JSON-RPC: {e}") # 스택 트레이스 포함 로깅
             return JSONResponse(
                 status_code=500,
                 content=JsonRpcResponse(
@@ -878,9 +916,6 @@ async def health_check():
 @app.get("/smithery-simple.json")
 async def get_smithery_simple(request: Request):
     """Smithery 호환 서버 메타데이터를 반환합니다."""
-    # 요청 쿼리 파라미터에서 baseUrl 추출 (없으면 None)
-    # baseUrl = request.query_params.get("baseUrl")
-    
     # 요청 호스트 및 스킴 추출 (로컬 테스트용)
     host = request.headers.get("host", "localhost")
     scheme = request.headers.get("x-forwarded-proto", "http")

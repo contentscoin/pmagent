@@ -1,51 +1,24 @@
 {
   "name": "pmagent-mcp-server",
   "version": "1.0.0",
-  "description": "PM 에이전트 시스템을 위한 MCP 서버",
-  "type": "module",
-  "main": "src/jsonrpc-server.js",
+  "description": "PMAgent MCP Server",
+  "main": "index.js",
   "scripts": {
-    "test": "python -m pytest",
-    "start": "python server.py",
-    "dev": "python server.py",
-    "build": "echo 'Building PMAgent MCP Server'",
-    "update-smithery": "node register_smithery.js",
-    "test:client": "node test_client.js",
-    "test:mcp": "node direct_client_test.js",
-    "test:mcp:local": "node direct_client_test.js --local",
+    "start": "python -m pmagent.mcp_server",
+    "dev": "nodemon --exec python -m pmagent.mcp_server",
+    "test": "echo \"Error: no test specified\" && exit 1",
     "smithery:register": "node register_smithery.js",
-    "smithery:reinstall": "node register_smithery.js --reinstall",
-    "smithery:local": "node register_smithery.js --local",
     "smithery:simple": "node smithery-install-direct.js",
-    "smithery:clean": "rm -rf ~/.smithery/connections.json",
-    "server:python": "python -m pmagent.server",
-    "smithery:test": "node smithery_client_test.js",
-    "direct:test": "node direct_client_test.js"
+    "smithery:server-only": "node register_server_only.js",
+    "smithery:shell": "bash register_server.sh"
   },
-  "keywords": [
-    "mcp",
-    "agent",
-    "pm"
-  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.10.1",
-    "@smithery/sdk": "^1.0.4",
-    "bcryptjs": "^3.0.2",
-    "body-parser": "^1.20.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.18.3",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.2.2",
-    "morgan": "^1.10.0",
-    "node-fetch": "^3.3.2",
-    "uuid": "^9.0.1",
-    "ws": "^8.18.1",
-    "zod": "^3.22.4"
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.0.1"
   }
 }

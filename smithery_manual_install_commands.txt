@@ -1,0 +1,7 @@
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --apiKey "8220ee20-fe17-464b-b658-35113b05be41" --client cursor
+
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --api-key "8220ee20-fe17-464b-b658-35113b05be41" --client cursor
+
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --key "8220ee20-fe17-464b-b658-35113b05be41" --client cursor
+
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --client cursor

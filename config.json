@@ -1,6 +1,23 @@
 {
+  "smithery": {
+    "packageName": "@contentscoin/pmagent",
+    "displayName": "PM Agent MCP Server",
+    "description": "Project Management MCP Server",
+    "version": "0.1.0",
+    "serverUrl": "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp",
+    "apiKey": "8220ee20-fe17-464b-b658-35113b05be41",
+    "documentationUrl": "https://github.com/contentscoin/pmagent",
+    "publisherName": "PMAgent Team",
+    "publisherUrl": "https://github.com/contentscoin/pmagent"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "baseUrl": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
+    "rpcPath": "/mcp"
+  },
   "url": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
-  "apiKey": "0c8f6386-e443-4b8b-95ba-22a40d5f5e38",
+  "apiKey": "8220ee20-fe17-464b-b658-35113b05be41",
   "mcpUrl": "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp",
   "localUrl": "http://localhost:4000/api/mcp",
   "environments": {

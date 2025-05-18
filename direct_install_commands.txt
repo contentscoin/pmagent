@@ -1,0 +1,41 @@
+# Smithery 서버 직접 등록 명령어 (Cursor 통합 없음)
+# 아래 명령어 중 하나를 선택하여 터미널에서 직접 실행하세요
+
+# 1. Smithery 디렉토리 생성 (없는 경우)
+mkdir -p ~/.smithery
+
+# 2. connections.json 파일 생성/업데이트
+cat > ~/.smithery/connections.json << EOF
+{
+  "@contentscoin/pmagent": {
+    "url": "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp",
+    "apiKey": "8220ee20-fe17-464b-b658-35113b05be41"
+  }
+}
+EOF
+
+# 3. 서버 등록 명령
+
+# 방법 1: apiKey 파라미터 사용
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --apiKey "8220ee20-fe17-464b-b658-35113b05be41" --client cursor
+
+# 방법 2: api-key 파라미터 사용
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --api-key "8220ee20-fe17-464b-b658-35113b05be41" --client cursor
+
+# 방법 3: key 파라미터 사용
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --key "8220ee20-fe17-464b-b658-35113b05be41" --client cursor
+
+# 방법 4: URL만 사용
+npx -y @smithery/cli@latest install @contentscoin/pmagent --url "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" --client cursor
+
+# 4. 서버 등록 확인
+npx -y @smithery/cli@latest list servers
+
+# 추가 트러블슈팅
+# Smithery 엔드포인트 확인
+curl -X GET "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp"
+
+# JSON-RPC 요청 테스트
+curl -X POST "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"rpc.discover","params":[],"id":1}' 
