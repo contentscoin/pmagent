@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "name": "PMAgent",
-  "base_url": "https://pmagent.vercel.app",
+  "base_url": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
   "description": "프로젝트 및 태스크 관리를 위한 MCP 서버. 프로젝트 생성, 업데이트, 삭제 및 태스크 관리를 지원합니다.",
   "endpoints": {
     "info": "/",
