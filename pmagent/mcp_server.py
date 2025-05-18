@@ -757,6 +757,115 @@ async def jsonrpc_endpoint(request: Request):
             ).dict(exclude_none=True)
         )
 
+@app.post("/mcp")
+async def mcp_jsonrpc_endpoint(request: Request):
+    """Smithery 용 JSON-RPC 2.0 요청을 처리합니다. `/mcp` 경로로 노출됩니다."""
+    # 요청 정보 세부 로깅 추가
+    client_host = request.client.host if request.client else "unknown"
+    logger.info(f"MCP 경로 JSON-RPC 요청 수신 - 클라이언트 IP: {client_host}, 헤더: {request.headers.get('user-agent', 'unknown')}")
+    
+    try:
+        body = await request.json()
+        logger.info(f"MCP 경로 JSON-RPC 요청 내용: {body}")
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON received for MCP JSON-RPC endpoint")
+        return JSONResponse(
+            status_code=400,
+            content=JsonRpcResponse(
+                jsonrpc="2.0",
+                error={"code": -32700, "message": "Parse error"},
+                id=None
+            ).dict(exclude_none=True)
+        )
+
+    rpc_request = JsonRpcRequest(**body)
+
+    if rpc_request.method == "mcp.getTools":
+        logger.info(f"MCP 경로 mcp.getTools 메서드 호출 감지 - 요청 ID: {rpc_request.id}")
+        
+        # 시작 시간 기록
+        start_time = datetime.now()
+        tools_spec = await get_tools()
+        # 종료 시간 기록 및 소요 시간 계산
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        
+        logger.info(f"MCP 경로 mcp.getTools 처리 완료 - 소요 시간: {duration:.4f}초, 응답 크기: {len(str(tools_spec))} 바이트")
+        
+        return JsonRpcResponse(
+            jsonrpc="2.0",
+            result=tools_spec,
+            id=rpc_request.id
+        )
+    elif rpc_request.method == "mcp.invokeTool":
+        if isinstance(rpc_request.params, list) and len(rpc_request.params) > 0:
+            # 파라미터가 리스트 형태일 경우, 첫 번째 요소를 사용 (일반적인 Smithery 형태)
+            tool_invocation_data = rpc_request.params[0]
+        elif isinstance(rpc_request.params, dict):
+            # 파라미터가 딕셔너리 형태일 경우 (직접 호출 등)
+            tool_invocation_data = rpc_request.params
+        else:
+            logger.error(f"MCP 경로: Invalid params format for mcp.invokeTool: {rpc_request.params}")
+            return JSONResponse(
+                status_code=400,
+                content=JsonRpcResponse(
+                    jsonrpc="2.0",
+                    error={"code": -32602, "message": "Invalid params"},
+                    id=rpc_request.id
+                ).dict(exclude_none=True)
+            )
+
+        try:
+            invocation = ToolInvocation(**tool_invocation_data)
+            result = await invoke_tool(invocation)
+            
+            if isinstance(result, JSONResponse):
+                pass # 위에서 이미 처리되었거나, 아래에서 dict로 처리
+
+            if isinstance(result, dict) and result.get("error"): # MCPError.to_dict() 형태일 경우
+                 return JSONResponse(
+                    content=JsonRpcResponse(
+                        jsonrpc="2.0",
+                        error=result.get("error"), # MCPError.to_dict()의 error 부분을 사용
+                        id=rpc_request.id
+                    ).dict(exclude_none=True)
+                )
+            else:
+                return JsonRpcResponse(
+                    jsonrpc="2.0",
+                    result=result, # 정상 결과 (dict)
+                    id=rpc_request.id
+                )
+        except HTTPException as http_exc:
+            logger.error(f"MCP 경로: HTTPException during invoke_tool via JSON-RPC: {http_exc.detail}")
+            return JSONResponse(
+                status_code=http_exc.status_code, # 원래 HTTP 상태 코드 유지
+                content=JsonRpcResponse(
+                    jsonrpc="2.0",
+                    error={"code": -32000, "message": f"Server error: {http_exc.detail}"},
+                    id=rpc_request.id
+                ).dict(exclude_none=True)
+            )
+        except Exception as e:
+            logger.exception(f"MCP 경로: Unexpected error during mcp.invokeTool via JSON-RPC: {e}") # 스택 트레이스 포함 로깅
+            return JSONResponse(
+                status_code=500,
+                content=JsonRpcResponse(
+                    jsonrpc="2.0",
+                    error={"code": -32000, "message": f"Internal server error: {str(e)}"},
+                    id=rpc_request.id
+                ).dict(exclude_none=True)
+            )
+    else:
+        return JSONResponse(
+            status_code=400,
+            content=JsonRpcResponse(
+                jsonrpc="2.0",
+                error={"code": -32601, "message": "Method not found"},
+                id=rpc_request.id
+            ).dict(exclude_none=True)
+        )
+
 @app.get("/health")
 async def health_check():
     """서버의 상태 및 DB 연결 상태를 확인합니다."""
@@ -767,12 +876,38 @@ async def health_check():
         return JSONResponse(content={"status": "unhealthy", "database_connection": "failed"}, status_code=503)
 
 @app.get("/smithery-simple.json")
-async def get_smithery_simple():
+async def get_smithery_simple(request: Request):
     """Smithery 호환 서버 메타데이터를 반환합니다."""
+    # 요청 쿼리 파라미터에서 baseUrl 추출 (없으면 None)
+    # baseUrl = request.query_params.get("baseUrl")
+    
+    # 요청 호스트 및 스킴 추출 (로컬 테스트용)
+    host = request.headers.get("host", "localhost")
+    scheme = request.headers.get("x-forwarded-proto", "http")
+    logger.info(f"Smithery 메타데이터 요청: host={host}, scheme={scheme}")
+    
+    # Koyeb 배포 URL 또는 환경 변수에서 설정한 URL 사용
+    base_url = os.environ.get("MCP_BASE_URL", "https://successive-glenn-contentscoin-34b6608c.koyeb.app")
+    
+    # 로컬에서 테스트하는 경우, 요청의 호스트 사용
+    if host and "localhost" in host or "127.0.0.1" in host:
+        base_url = f"{scheme}://{host}"
+        logger.info(f"로컬 테스트 감지: base_url={base_url}")
+    
+    # baseUrl에 /mcp 경로 추가 (이미 있는 경우 중복 추가하지 않음)
+    if not base_url.endswith("/mcp"):
+        if base_url.endswith("/"):
+            base_url = f"{base_url}mcp"
+        else:
+            base_url = f"{base_url}/mcp"
+    
+    logger.info(f"Smithery 메타데이터 응답: baseUrl={base_url}")
+    
     return JSONResponse(content={
         "name": "PMAgent MCP Server",
         "description": "Enable collaborative project management by integrating multiple AI agents with external tools like Unity, GitHub, and Figma through a unified MCP server. Facilitate seamless coordination among project managers, designers, developers, and AI engineers to streamline project workflows. Enhance productivity by automating interactions with diverse external resources and APIs.",
         "version": "0.1.0",
+        "baseUrl": base_url,  # 추가: 명시적으로 /mcp 경로 포함된 baseUrl 지정
         "tools": TOOLS,  # TOOLS 변수 전체를 사용하도록 변경
         "authorization": {
             "type": "none"
