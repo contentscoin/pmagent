@@ -10,7 +10,9 @@
     "smithery:register": "node register_smithery.js",
     "smithery:simple": "node smithery-install-direct.js",
     "smithery:server-only": "node register_server_only.js",
-    "smithery:shell": "bash register_server.sh"
+    "smithery:shell": "bash register_server.sh",
+    "smithery:create-config": "node create_connections.js",
+    "smithery:connect": "node connect_smithery.js"
   },
   "author": "",
   "license": "ISC",

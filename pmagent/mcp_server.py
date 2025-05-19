@@ -12,6 +12,8 @@ import sys
 import json
 import logging
 import asyncio
+import time
+import psutil
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +32,9 @@ from pmagent.mcp_common import MCPServer
 from pmagent.mcp_agent_api import create_mcp_api
 import pmagent.db_manager as db_manager # 이 임포트는 이미 절대 경로 스타일임
 import uuid # project_id, task_id 생성용
+
+# 기본 경로 설정
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 로깅 설정
 logging.basicConfig(
@@ -906,12 +911,59 @@ async def mcp_jsonrpc_endpoint(request: Request):
 
 @app.get("/health")
 async def health_check():
-    """서버의 상태 및 DB 연결 상태를 확인합니다."""
-    db_connected = db_manager.check_db_connection()
-    if db_connected:
-        return JSONResponse(content={"status": "healthy", "database_connection": "ok"}, status_code=200)
-    else:
-        return JSONResponse(content={"status": "unhealthy", "database_connection": "failed"}, status_code=503)
+    """서버의 상태 및 DB 연결 상태를 확인합니다. Koyeb 헬스체크에 사용됩니다."""
+    try:
+        # 현재 프로세스 정보 수집
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        cpu_percent = process.cpu_percent(interval=0.1)
+        
+        # 시스템 정보 수집
+        system_memory = psutil.virtual_memory()
+        
+        # 데이터베이스 연결 확인
+        db_connected = db_manager.check_db_connection()
+        
+        # 서버 시작 시간 (Koyeb에서는 인스턴스 재시작 시 변경됨)
+        start_time = datetime.fromtimestamp(process.create_time()).isoformat()
+        
+        # 응답 구성
+        response_data = {
+            "status": "healthy" if db_connected else "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "version": "0.1.0",
+            "uptime_seconds": int(time.time() - process.create_time()),
+            "start_time": start_time,
+            "environment": {
+                "koyeb_app": os.environ.get("KOYEB_APP_NAME", "Not running on Koyeb"),
+                "koyeb_service": os.environ.get("KOYEB_SERVICE_NAME", ""),
+                "web_concurrency": os.environ.get("WEB_CONCURRENCY", "Not set")
+            },
+            "database": {
+                "connected": db_connected,
+                "location": os.path.join(BASE_DIR, "data")
+            },
+            "resources": {
+                "cpu_percent": cpu_percent,
+                "memory_usage_mb": memory_info.rss / (1024 * 1024),
+                "memory_percent": (memory_info.rss / system_memory.total) * 100
+            }
+        }
+        
+        # 실패 시 503, 성공 시 200 반환
+        status_code = 200 if db_connected else 503
+        
+        return JSONResponse(content=response_data, status_code=status_code)
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return JSONResponse(
+            content={
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }, 
+            status_code=500
+        )
 
 @app.get("/smithery-simple.json")
 async def get_smithery_simple(request: Request):
@@ -925,7 +977,7 @@ async def get_smithery_simple(request: Request):
     base_url = os.environ.get("MCP_BASE_URL", "https://successive-glenn-contentscoin-34b6608c.koyeb.app")
     
     # 로컬에서 테스트하는 경우, 요청의 호스트 사용
-    if host and "localhost" in host or "127.0.0.1" in host:
+    if host and ("localhost" in host or "127.0.0.1" in host):
         base_url = f"{scheme}://{host}"
         logger.info(f"로컬 테스트 감지: base_url={base_url}")
     
@@ -938,14 +990,93 @@ async def get_smithery_simple(request: Request):
     
     logger.info(f"Smithery 메타데이터 응답: baseUrl={base_url}")
     
+    # 각 도구에 더 상세한 설명과 예시 추가
+    enhanced_tools = []
+    for tool in TOOLS:
+        enhanced_tool = tool.copy()  # 원본 TOOLS 데이터 유지
+        
+        # 도구 정보 추가
+        if "schema" not in enhanced_tool:
+            # JSON 스키마 형식 속성 정보 추가
+            parameters_schema = {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+            
+            # 파라미터 설명을 기반으로 스키마 속성 생성
+            if "parameters" in enhanced_tool:
+                for param_name, param_desc in enhanced_tool["parameters"].items():
+                    # 필수 파라미터 여부 판단 (설명에 "선택" 단어가 있는지 확인)
+                    is_required = "선택" not in param_desc
+                    
+                    # 타입 추론 - 보통은 문자열로 처리하며, 자세한 타입 정의가 필요하면 TOOLS 정의를 확장해야 함
+                    param_type = "string"
+                    if "ID" in param_name or param_name.endswith("Id"):
+                        param_type = "string"
+                    elif param_name == "tasks":
+                        param_type = "array"
+                    
+                    # 스키마 속성 추가
+                    parameters_schema["properties"][param_name] = {
+                        "type": param_type,
+                        "description": param_desc
+                    }
+                    
+                    # 필수 파라미터 추가
+                    if is_required:
+                        parameters_schema["required"].append(param_name)
+            
+            enhanced_tool["schema"] = parameters_schema
+        
+        # 예시 추가 (서비스 통합 테스트에 유용)
+        if "examples" not in enhanced_tool:
+            examples = []
+            tool_name = enhanced_tool["name"]
+            
+            # 도구별 예시 생성
+            if tool_name == "request_planning":
+                examples.append({
+                    "name": "간단한 계획 요청",
+                    "parameters": {
+                        "originalRequest": "웹사이트 제작을 위한 프론트엔드와 백엔드 개발",
+                        "tasks": [
+                            {"title": "UI 디자인", "description": "웹사이트 UI 디자인 제작"},
+                            {"title": "백엔드 API 개발", "description": "필요한 API 엔드포인트 개발"}
+                        ]
+                    }
+                })
+            elif tool_name == "get_next_task":
+                examples.append({
+                    "name": "다음 태스크 요청",
+                    "parameters": {
+                        "requestId": "req_12345",
+                        "agentId": "DesignerAgent_001"
+                    }
+                })
+            
+            enhanced_tool["examples"] = examples
+        
+        enhanced_tools.append(enhanced_tool)
+    
     return JSONResponse(content={
         "name": "PMAgent MCP Server",
         "description": "Enable collaborative project management by integrating multiple AI agents with external tools like Unity, GitHub, and Figma through a unified MCP server. Facilitate seamless coordination among project managers, designers, developers, and AI engineers to streamline project workflows. Enhance productivity by automating interactions with diverse external resources and APIs.",
         "version": "0.1.0",
-        "baseUrl": base_url,  # 추가: 명시적으로 /mcp 경로 포함된 baseUrl 지정
-        "tools": TOOLS,  # TOOLS 변수 전체를 사용하도록 변경
+        "baseUrl": base_url,  # 명시적으로 /mcp 경로 포함된 baseUrl 지정
+        "tools": enhanced_tools,  # 상세 정보가 추가된 TOOLS 사용
         "authorization": {
             "type": "none"
+        },
+        "contact": {
+            "name": "PMAgent Team",
+            "url": "https://github.com/contentscoin/pmagent",
+            "email": "support@contentscoin.ai"
+        },
+        "endpoints": {
+            "rpc": f"{base_url}",  # JSON-RPC 엔드포인트
+            "ws": f"{scheme}://{host}/mcp".replace("http", "ws"),  # WebSocket 엔드포인트
+            "health": f"{scheme}://{host}/health"  # 건강 체크 엔드포인트
         }
     })
 
