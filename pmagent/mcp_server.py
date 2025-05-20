@@ -968,117 +968,113 @@ async def health_check():
 @app.get("/smithery-simple.json")
 async def get_smithery_simple(request: Request):
     """Smithery 호환 서버 메타데이터를 반환합니다."""
-    # 요청 호스트 및 스킴 추출 (로컬 테스트용)
-    host = request.headers.get("host", "localhost")
-    scheme = request.headers.get("x-forwarded-proto", "http")
-    logger.info(f"Smithery 메타데이터 요청: host={host}, scheme={scheme}")
-    
-    # Koyeb 배포 URL 또는 환경 변수에서 설정한 URL 사용
-    base_url = os.environ.get("MCP_BASE_URL", "https://successive-glenn-contentscoin-34b6608c.koyeb.app")
-    
-    # 로컬에서 테스트하는 경우, 요청의 호스트 사용
-    if host and ("localhost" in host or "127.0.0.1" in host):
-        base_url = f"{scheme}://{host}"
-        logger.info(f"로컬 테스트 감지: base_url={base_url}")
-    
-    # baseUrl에 /mcp 경로 추가 (이미 있는 경우 중복 추가하지 않음)
-    if not base_url.endswith("/mcp"):
-        if base_url.endswith("/"):
-            base_url = f"{base_url}mcp"
-        else:
-            base_url = f"{base_url}/mcp"
-    
-    logger.info(f"Smithery 메타데이터 응답: baseUrl={base_url}")
-    
-    # 각 도구에 더 상세한 설명과 예시 추가
-    enhanced_tools = []
-    for tool in TOOLS:
-        enhanced_tool = tool.copy()  # 원본 TOOLS 데이터 유지
+    try:
+        # 요청 호스트 및 스킴 추출 (로컬 테스트용)
+        host = request.headers.get("host", "localhost")
+        scheme = request.headers.get("x-forwarded-proto", "http")
+        logger.info(f"Smithery 메타데이터 요청: host={host}, scheme={scheme}")
         
-        # 도구 정보 추가
-        if "schema" not in enhanced_tool:
-            # JSON 스키마 형식 속성 정보 추가
-            parameters_schema = {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
+        # Koyeb 배포 URL 또는 환경 변수에서 설정한 URL 사용
+        base_url = os.environ.get("MCP_BASE_URL", "https://successive-glenn-contentscoin-34b6608c.koyeb.app")
+        
+        # 로컬에서 테스트하는 경우, 요청의 호스트 사용
+        if host and ("localhost" in host or "127.0.0.1" in host):
+            base_url = f"{scheme}://{host}"
+            logger.info(f"로컬 테스트 감지: base_url={base_url}")
+        
+        # baseUrl에 /mcp 경로 추가 (이미 있는 경우 중복 추가하지 않음)
+        if not base_url.endswith("/mcp"):
+            if base_url.endswith("/"):
+                base_url = f"{base_url}mcp"
+            else:
+                base_url = f"{base_url}/mcp"
+        
+        logger.info(f"Smithery 메타데이터 응답: baseUrl={base_url}")
+        
+        # 각 도구에 더 상세한 설명과 예시 추가
+        enhanced_tools = []
+        for tool in TOOLS:
+            enhanced_tool = tool.copy()  # 원본 TOOLS 데이터 유지
             
-            # 파라미터 설명을 기반으로 스키마 속성 생성
-            if "parameters" in enhanced_tool:
-                for param_name, param_desc in enhanced_tool["parameters"].items():
-                    # 필수 파라미터 여부 판단 (설명에 "선택" 단어가 있는지 확인)
-                    is_required = "선택" not in param_desc
-                    
-                    # 타입 추론 - 보통은 문자열로 처리하며, 자세한 타입 정의가 필요하면 TOOLS 정의를 확장해야 함
-                    param_type = "string"
-                    if "ID" in param_name or param_name.endswith("Id"):
+            # 도구 정보 추가
+            if "schema" not in enhanced_tool:
+                parameters_schema = {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+                if "parameters" in enhanced_tool:
+                    for param_name, param_desc in enhanced_tool["parameters"].items():
+                        is_required = "선택" not in param_desc
                         param_type = "string"
-                    elif param_name == "tasks":
-                        param_type = "array"
-                    
-                    # 스키마 속성 추가
-                    parameters_schema["properties"][param_name] = {
-                        "type": param_type,
-                        "description": param_desc
-                    }
-                    
-                    # 필수 파라미터 추가
-                    if is_required:
-                        parameters_schema["required"].append(param_name)
+                        if "ID" in param_name or param_name.endswith("Id"):
+                            param_type = "string"
+                        elif param_name == "tasks":
+                            param_type = "array"
+                        parameters_schema["properties"][param_name] = {
+                            "type": param_type,
+                            "description": param_desc
+                        }
+                        if is_required:
+                            parameters_schema["required"].append(param_name)
+                enhanced_tool["schema"] = parameters_schema
             
-            enhanced_tool["schema"] = parameters_schema
+            if "examples" not in enhanced_tool:
+                examples = []
+                tool_name = enhanced_tool["name"]
+                if tool_name == "request_planning":
+                    examples.append({
+                        "name": "간단한 계획 요청",
+                        "parameters": {
+                            "originalRequest": "웹사이트 제작을 위한 프론트엔드와 백엔드 개발",
+                            "tasks": [
+                                {"title": "UI 디자인", "description": "웹사이트 UI 디자인 제작"},
+                                {"title": "백엔드 API 개발", "description": "필요한 API 엔드포인트 개발"}
+                            ]
+                        }
+                    })
+                elif tool_name == "get_next_task":
+                    examples.append({
+                        "name": "다음 태스크 요청",
+                        "parameters": {
+                            "requestId": "req_12345",
+                            "agentId": "DesignerAgent_001"
+                        }
+                    })
+                enhanced_tool["examples"] = examples
+            enhanced_tools.append(enhanced_tool)
         
-        # 예시 추가 (서비스 통합 테스트에 유용)
-        if "examples" not in enhanced_tool:
-            examples = []
-            tool_name = enhanced_tool["name"]
-            
-            # 도구별 예시 생성
-            if tool_name == "request_planning":
-                examples.append({
-                    "name": "간단한 계획 요청",
-                    "parameters": {
-                        "originalRequest": "웹사이트 제작을 위한 프론트엔드와 백엔드 개발",
-                        "tasks": [
-                            {"title": "UI 디자인", "description": "웹사이트 UI 디자인 제작"},
-                            {"title": "백엔드 API 개발", "description": "필요한 API 엔드포인트 개발"}
-                        ]
-                    }
-                })
-            elif tool_name == "get_next_task":
-                examples.append({
-                    "name": "다음 태스크 요청",
-                    "parameters": {
-                        "requestId": "req_12345",
-                        "agentId": "DesignerAgent_001"
-                    }
-                })
-            
-            enhanced_tool["examples"] = examples
-        
-        enhanced_tools.append(enhanced_tool)
-    
-    return JSONResponse(content={
-        "name": "PMAgent MCP Server",
-        "description": "Enable collaborative project management by integrating multiple AI agents with external tools like Unity, GitHub, and Figma through a unified MCP server. Facilitate seamless coordination among project managers, designers, developers, and AI engineers to streamline project workflows. Enhance productivity by automating interactions with diverse external resources and APIs.",
-        "version": "0.1.0",
-        "baseUrl": base_url,  # 명시적으로 /mcp 경로 포함된 baseUrl 지정
-        "tools": enhanced_tools,  # 상세 정보가 추가된 TOOLS 사용
-        "authorization": {
-            "type": "none"
-        },
-        "contact": {
-            "name": "PMAgent Team",
-            "url": "https://github.com/contentscoin/pmagent",
-            "email": "support@contentscoin.ai"
-        },
-        "endpoints": {
-            "rpc": f"{base_url}",  # JSON-RPC 엔드포인트
-            "ws": f"{scheme}://{host}/mcp".replace("http", "ws"),  # WebSocket 엔드포인트
-            "health": f"{scheme}://{host}/health"  # 건강 체크 엔드포인트
+        response_content = {
+            "name": "PMAgent MCP Server",
+            "description": "Enable collaborative project management by integrating multiple AI agents with external tools like Unity, GitHub, and Figma through a unified MCP server. Facilitate seamless coordination among project managers, designers, developers, and AI engineers to streamline project workflows. Enhance productivity by automating interactions with diverse external resources and APIs.",
+            "version": "0.1.0",
+            "baseUrl": base_url,
+            "tools": enhanced_tools,
+            "authorization": {
+                "type": "none"
+            },
+            "contact": {
+                "name": "PMAgent Team",
+                "url": "https://github.com/contentscoin/pmagent",
+                "email": "support@contentscoin.ai"
+            },
+            "endpoints": {
+                "rpc": f"{base_url}",
+                "ws": f"{scheme}://{host}/mcp".replace("http", "ws"),
+                "health": f"{scheme}://{host}/health"
+            }
         }
-    })
+        return JSONResponse(content=response_content)
+
+    except Exception as e:
+        logger.error(f"Error generating Smithery simple JSON: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Failed to generate Smithery metadata",
+                "details": str(e)
+            }
+        )
 
 # WebSocket 연결 관리
 class ConnectionManager:

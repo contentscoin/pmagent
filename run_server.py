@@ -159,21 +159,17 @@ def main():
     # 서버 시작
     try:
         logger.info(f"PMAgent MCP 서버를 시작합니다 (http://{host_to_use}:{port_to_use})")
-        # Uvicorn 설정 - log_level 인수 추가
-        uvicorn_config = {
-            "host": host_to_use,
-            "port": port_to_use,
-            "reload": False,
-            "log_level": args.log_level.lower()
-        }
-        
-        # Koyeb에서는 종료 시간을 늘림
-        if os.environ.get("KOYEB_APP_NAME"):
-            uvicorn_config["timeout_keep_alive"] = 120  # 기본값은 5초지만 Koyeb에서는 더 길게 설정
-        
-        # uvicorn.run() 호출 시 애플리케이션 객체 대신 임포트 문자열 사용
-        logger.info(f"Uvicorn 설정: {uvicorn_config}")
-        uvicorn.run("pmagent.mcp_server:app", **uvicorn_config)
+        # 간단하게 uvicorn 실행 - 기본 매개변수만 사용
+        logger.info(f"호스트: {host_to_use}, 포트: {port_to_use}, 로그 레벨: {args.log_level.lower()}")
+        # Koyeb에서는 가장 안정적인 방식으로 실행
+        uvicorn.run(
+            "pmagent.mcp_server:app", 
+            host=host_to_use, 
+            port=port_to_use, 
+            log_level=args.log_level.lower(),
+            limit_concurrency=4,  # 동시 연결 제한
+            timeout_keep_alive=75  # 키프얼라이브 타임아웃 (Koyeb 기본값보다 낮게)
+        )
     except KeyboardInterrupt:
         logger.info("서버가 종료되었습니다.")
     except Exception as e: 
