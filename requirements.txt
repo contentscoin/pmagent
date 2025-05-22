@@ -58,7 +58,6 @@ packaging==24.2
 pathspec==0.12.1
 platformdirs==4.3.7
 pluggy==1.5.0
--e git+https://github.com/contentscoin/pmagent.git@6d01b6bf46bfb4af679e27943e815b16a146dcd3#egg=pmagent
 propcache==0.3.1
 proto-plus==1.26.1
 protobuf==5.29.4
