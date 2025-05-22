@@ -911,59 +911,28 @@ async def mcp_jsonrpc_endpoint(request: Request):
 
 @app.get("/health")
 async def health_check():
-    """서버의 상태 및 DB 연결 상태를 확인합니다. Koyeb 헬스체크에 사용됩니다."""
+    """(테스트용) 서버의 상태 및 DB 연결 상태를 확인합니다."""
+    logger.info("Health check endpoint (with DB check) called.")
+    db_connected_status = False
+    db_error_details = None
     try:
-        # 현재 프로세스 정보 수집
-        process = psutil.Process()
-        memory_info = process.memory_info()
-        cpu_percent = process.cpu_percent(interval=0.1)
-        
-        # 시스템 정보 수집
-        system_memory = psutil.virtual_memory()
-        
-        # 데이터베이스 연결 확인
-        db_connected = db_manager.check_db_connection()
-        
-        # 서버 시작 시간 (Koyeb에서는 인스턴스 재시작 시 변경됨)
-        start_time = datetime.fromtimestamp(process.create_time()).isoformat()
-        
-        # 응답 구성
-        response_data = {
-            "status": "healthy" if db_connected else "unhealthy",
-            "timestamp": datetime.now().isoformat(),
-            "version": "0.1.0",
-            "uptime_seconds": int(time.time() - process.create_time()),
-            "start_time": start_time,
-            "environment": {
-                "koyeb_app": os.environ.get("KOYEB_APP_NAME", "Not running on Koyeb"),
-                "koyeb_service": os.environ.get("KOYEB_SERVICE_NAME", ""),
-                "web_concurrency": os.environ.get("WEB_CONCURRENCY", "Not set")
-            },
-            "database": {
-                "connected": db_connected,
-                "location": os.path.join(BASE_DIR, "data")
-            },
-            "resources": {
-                "cpu_percent": cpu_percent,
-                "memory_usage_mb": memory_info.rss / (1024 * 1024),
-                "memory_percent": (memory_info.rss / system_memory.total) * 100
-            }
-        }
-        
-        # 실패 시 503, 성공 시 200 반환
-        status_code = 200 if db_connected else 503
-        
-        return JSONResponse(content=response_data, status_code=status_code)
+        db_connected_status = db_manager.check_db_connection()
     except Exception as e:
-        logger.error(f"Health check error: {str(e)}")
-        return JSONResponse(
-            content={
-                "status": "error",
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }, 
-            status_code=500
-        )
+        logger.error(f"Health check: DB connection check failed: {str(e)}", exc_info=True)
+        db_error_details = str(e)
+
+    response_data = {
+        "status": "healthy" if db_connected_status else "unhealthy",
+        "timestamp": datetime.now().isoformat(),
+        "database_connected": db_connected_status
+    }
+    if db_error_details:
+        response_data["database_error"] = db_error_details
+    
+    # 실패 시 503, 성공 시 200 반환
+    status_code = 200 if db_connected_status else 503
+        
+    return JSONResponse(content=response_data, status_code=status_code)
 
 @app.get("/smithery-simple.json")
 async def get_smithery_simple(request: Request):
