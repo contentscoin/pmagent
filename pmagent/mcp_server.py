@@ -911,8 +911,10 @@ async def mcp_jsonrpc_endpoint(request: Request):
 
 @app.get("/health")
 async def health_check():
-    """(테스트용) 서버의 상태 및 DB 연결 상태를 확인합니다."""
-    logger.info("Health check endpoint (with DB check) called.")
+    """서버의 상태, DB 연결 상태 및 시스템 리소스 사용량을 확인합니다."""
+    logger.info("Comprehensive health check endpoint called.")
+    
+    # DB 연결 확인
     db_connected_status = False
     db_error_details = None
     try:
@@ -921,16 +923,37 @@ async def health_check():
         logger.error(f"Health check: DB connection check failed: {str(e)}", exc_info=True)
         db_error_details = str(e)
 
+    # 시스템 리소스 확인 (psutil 사용)
+    process_memory_mb = -1
+    system_memory_percent = -1
+    cpu_percent = -1
+    try:
+        process = psutil.Process()  # 현재 프로세스
+        process_memory_info = process.memory_info()
+        process_memory_mb = process_memory_info.rss / (1024 * 1024)  # RSS를 MB 단위로
+
+        system_memory = psutil.virtual_memory()
+        system_memory_percent = system_memory.percent
+
+        cpu_percent = psutil.cpu_percent(interval=0.1) # 짧은 간격으로 CPU 사용률 측정
+    except Exception as e:
+        logger.error(f"Health check: psutil resource check failed: {str(e)}", exc_info=True)
+        # psutil 오류는 헬스 체크 실패로 간주하지는 않지만, 로그는 남김
+
+    # 최종 상태 결정: DB 연결이 필수
+    is_healthy = db_connected_status
+    status_code = 200 if is_healthy else 503
+
     response_data = {
-        "status": "healthy" if db_connected_status else "unhealthy",
+        "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
-        "database_connected": db_connected_status
+        "database_connected": db_connected_status,
+        "process_memory_mb": round(process_memory_mb, 2),
+        "system_memory_percent": system_memory_percent,
+        "cpu_percent": cpu_percent
     }
     if db_error_details:
         response_data["database_error"] = db_error_details
-    
-    # 실패 시 503, 성공 시 200 반환
-    status_code = 200 if db_connected_status else 503
         
     return JSONResponse(content=response_data, status_code=status_code)
 
