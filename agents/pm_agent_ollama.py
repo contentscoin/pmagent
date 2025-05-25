@@ -277,7 +277,7 @@ class PMAgentOllama(BaseTool):
         # ... (다른 핸들러 호출) ...
         else: # 기본적으로 direct 또는 알 수 없는 타입
             return self._handle_direct_response(processed_task_desc)
-
+    
     def _analyze_task(self, task_desc: str) -> Tuple[str, Optional[str], str]:
         """
         작업 설명을 분석하여 작업 유형과 관련 에이전트 추출

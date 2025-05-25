@@ -300,7 +300,7 @@ class BackendAgentOllama(BaseTool):
                     logger.info(f"{function_name}: try_fix_json_string로 JSON 보정 파싱 성공.")
                     return fixed
                 return None
-
+            
     def create_api_endpoint(self, description: str) -> Dict[str, Any]:
         """
         API 엔드포인트 생성
@@ -317,7 +317,7 @@ class BackendAgentOllama(BaseTool):
             project_context_info = f"현재 작업 중인 프로젝트는 '{self.current_project_name}'(ID: {self.current_project_id})입니다. "
         elif self.current_project_id:
             project_context_info = f"현재 작업 중인 프로젝트 ID는 {self.current_project_id}입니다. "
-
+        
         prompt = f"""
         {project_context_info}다음은 API 엔드포인트 생성 요청입니다: {description}
 
@@ -327,8 +327,8 @@ class BackendAgentOllama(BaseTool):
         - API 경로: {self.project_config.get("api_path")}
 
         응답은 다음 JSON 형식을 엄격하게 따라야 합니다. 코드 블록 안에 JSON을 포함하고, 다른 설명은 넣지 마십시오:
-        ```json
-        {{
+```json
+{{
             "endpoint": "/api/v1/example",
             "method": "GET", // GET, POST, PUT, DELETE 등
             "description": "API 엔드포인트에 대한 간략한 설명",
@@ -339,13 +339,13 @@ class BackendAgentOllama(BaseTool):
                 {{"status": 200, "description": "성공 응답 설명", "example": {{"message": "성공"}}}}
             ],
             "code": "// 여기에 {self.project_config.get("framework")} 프레임워크 기반의 API 엔드포인트 코드를 작성합니다.\n// 예시: JavaScript 또는 TypeScript 코드"
-        }}
-        ```
+}}
+```
         요청에 대한 API 엔드포인트 정의를 생성해주세요.
         """
         ollama_response = self._ollama_request(prompt)
         return self._parse_ollama_json_response(ollama_response.get("response", ""), "create_api_endpoint")
-
+            
     def create_database_schema(self, description: str) -> Dict[str, Any]:
         """
         데이터베이스 스키마 생성
@@ -362,7 +362,7 @@ class BackendAgentOllama(BaseTool):
             project_context_info = f"현재 작업 중인 프로젝트는 '{self.current_project_name}'(ID: {self.current_project_id})입니다. "
         elif self.current_project_id:
             project_context_info = f"현재 작업 중인 프로젝트 ID는 {self.current_project_id}입니다. "
-
+        
         prompt = f"""
         {project_context_info}다음은 데이터베이스 스키마 생성 요청입니다: {description}
 
@@ -371,29 +371,29 @@ class BackendAgentOllama(BaseTool):
         - 모델 경로: {self.project_config.get("models_path")}
 
         응답은 다음 JSON 형식을 엄격하게 따라야 합니다. 코드 블록 안에 JSON을 포함하고, 다른 설명은 넣지 마십시오:
-        ```json
-        {{
+```json
+{{
             "database": "{self.project_config.get("database")}",
-            "entities": [
-                {{
+    "entities": [
+        {{
                     "name": "ExampleEntity",
                     "description": "엔티티 설명",
-                    "attributes": [
+            "attributes": [
                         {{"name": "attribute_name", "type": "String", "description": "속성 설명", "required": true, "unique": false, "default": null, "ref": null}}
-                    ],
-                    "relationships": [
-                        {{"entity": "RelatedEntity", "type": "One-to-Many", "description": "관계 설명"}}
-                    ]
-                }}
             ],
+            "relationships": [
+                        {{"entity": "RelatedEntity", "type": "One-to-Many", "description": "관계 설명"}}
+            ]
+                }}
+    ],
             "code": "// 여기에 {self.project_config.get("database")} 스키마 정의 코드를 작성합니다.\n// 예시: Mongoose (JavaScript), SQLAlchemy (Python) 등"
-        }}
-        ```
+}}
+```
         요청에 대한 데이터베이스 스키마 정의를 생성해주세요.
         """
         ollama_response = self._ollama_request(prompt)
         return self._parse_ollama_json_response(ollama_response.get("response", ""), "create_database_schema")
-
+            
     def create_authentication_system(self, description: str) -> Dict[str, Any]:
         """
         인증 시스템 생성
@@ -410,7 +410,7 @@ class BackendAgentOllama(BaseTool):
             project_context_info = f"현재 작업 중인 프로젝트는 '{self.current_project_name}'(ID: {self.current_project_id})입니다. "
         elif self.current_project_id:
             project_context_info = f"현재 작업 중인 프로젝트 ID는 {self.current_project_id}입니다. "
-
+        
         prompt = f"""
         {project_context_info}다음은 인증 시스템 생성 요청입니다: {description}
 
@@ -419,17 +419,17 @@ class BackendAgentOllama(BaseTool):
         - 프레임워크: {self.project_config.get("framework")}
 
         응답은 다음 JSON 형식을 엄격하게 따라야 합니다. 코드 블록 안에 JSON을 포함하고, 다른 설명은 넣지 마십시오:
-        ```json
-        {{
+```json
+{{
             "auth_method": "{self.project_config.get("auth_provider")}",
             "features": ["로그인", "회원가입", "토큰 갱신"],
             "flow": ["사용자 등록", "로그인 및 토큰 발급", "토큰 검증"],
-            "endpoints": [
+    "endpoints": [
                 {{"path": "/api/auth/register", "method": "POST", "description": "회원가입"}}
-            ],
+    ],
             "code": "// 여기에 {self.project_config.get("auth_provider")} 기반 인증 시스템 코드를 {self.project_config.get("framework")} 프레임워크에 맞게 작성합니다."
-        }}
-        ```
+}}
+```
         요청에 대한 인증 시스템 정의를 생성해주세요.
         """
         ollama_response = self._ollama_request(prompt)
@@ -596,8 +596,8 @@ class BackendAgentOllama(BaseTool):
                 "status": "error",
                 "message": f"지원하지 않는 태스크 타입: {task_type}",
                 "supported_types": ["create_api_endpoint", "create_database_schema", "create_authentication_system", "create_test_code", "create_middleware", "validate_security", "optimize_performance"]
-            }
-            
+                }
+                
     def _run(self, tool_input: str) -> str:
         """
         BaseTool 메서드 오버라이드: 도구 실행
