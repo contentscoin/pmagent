@@ -167,7 +167,7 @@ def main():
             host=host_to_use, 
             port=port_to_use, 
             log_level=args.log_level.lower(),
-            limit_concurrency=4,  # 동시 연결 제한
+            limit_concurrency=10,  # 동시 연결 제한
             timeout_keep_alive=75  # 키프얼라이브 타임아웃 (Koyeb 기본값보다 낮게)
         )
     except KeyboardInterrupt:
