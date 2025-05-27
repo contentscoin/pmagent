@@ -1068,6 +1068,11 @@ async def get_smithery_simple(request: Request):
             }
         )
 
+@app.get("/smithery-simple.js")
+async def get_smithery_simple_js_alias(request: Request):
+    logger.info("Received request for /smithery-simple.js, serving .json content")
+    return await get_smithery_simple(request)
+
 # WebSocket 연결 관리
 class ConnectionManager:
     def __init__(self):
