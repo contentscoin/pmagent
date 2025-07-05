@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/contentscoin-pmagent-badge.png)](https://mseep.ai/app/contentscoin-pmagent)
+
 # PMAgent MCP Server
 
 PM Agent MCP(Model Context Protocol) 서버는 프로젝트 관리 및 다양한 AI 에이전트 조정을 위한 JSON-RPC 2.0 기반 서버입니다.
