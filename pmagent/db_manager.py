@@ -1,8 +1,11 @@
 import sqlite3
 import os
 import json
+import logging
 from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # --- DB 파일 경로 설정 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -22,7 +25,7 @@ def get_db_connection(db_path, timeout=10.0):
 
 # --- ProjectMasterDB 초기화 및 테이블 생성 ---
 def init_project_master_db():
-    print("[DEBUG] init_project_master_db() CALLED") # DEBUG PRINT
+    logger.debug("init_project_master_db() called")
     """ProjectMasterDB를 초기화하고 필요한 테이블을 생성합니다."""
     conn = get_db_connection(PROJECT_MASTER_DB_PATH)
     cursor = conn.cursor()
@@ -72,7 +75,7 @@ def init_project_master_db():
         END;
         ''')
     except sqlite3.OperationalError as e:
-        print(f"Warning: Could not create trigger for projects table (might be an older SQLite version or syntax issue): {e}")
+        logger.warning(f"Could not create trigger for projects table (might be an older SQLite version or syntax issue): {e}")
 
 
     try:
@@ -86,7 +89,7 @@ def init_project_master_db():
         END;
         ''')
     except sqlite3.OperationalError as e:
-        print(f"Warning: Could not create trigger for master_tasks table: {e}")
+        logger.warning(f"Could not create trigger for master_tasks table: {e}")
 
 
     conn.commit()
@@ -94,7 +97,7 @@ def init_project_master_db():
 
 # --- AgentSharedDB 초기화 및 테이블 생성 ---
 def init_agent_shared_db():
-    print("[DEBUG] init_agent_shared_db() CALLED") # DEBUG PRINT
+    logger.debug("init_agent_shared_db() called")
     """AgentSharedDB를 초기화하고 필요한 테이블을 생성합니다."""
     conn = get_db_connection(AGENT_SHARED_DB_PATH)
     cursor = conn.cursor()
@@ -129,7 +132,7 @@ def add_project(project_id, project_name, status='pending'):
         conn.commit()
         return project_id
     except sqlite3.IntegrityError:
-        print(f"Error: Project with ID {project_id} already exists.")
+        logger.error(f"Project with ID {project_id} already exists.")
         return None
     finally:
         conn.close()

@@ -63,12 +63,6 @@ async def lifespan(app: FastAPI):
 
     # 애플리케이션 종료 시 실행될 코드
     logger.info("FastAPI application shutting down.")
-    # 기존 global_task_manager._save_data()는 이제 사용하지 않으므로 주석 처리 또는 삭제
-    # try:
-    #     global_task_manager._save_data() # 종료 시 데이터 저장
-    #     logger.info("Task manager data saved successfully on shutdown.")
-    # except Exception as e:
-    #     logger.error(f"Error saving task manager data on shutdown: {str(e)}")
 
 # FastAPI 애플리케이션 생성 (lifespan 추가)
 app = FastAPI(

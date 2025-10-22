@@ -130,7 +130,21 @@ class AuthManager:
         
         # 관리자 계정이 없으면 생성
         if not admin_exists:
-            default_admin_password = os.environ.get("DEFAULT_ADMIN_PASSWORD", "admin123")
+            default_admin_password = os.environ.get("DEFAULT_ADMIN_PASSWORD")
+
+            if not default_admin_password:
+                # 환경 변수가 설정되지 않은 경우 강력한 랜덤 비밀번호 생성
+                import secrets
+                import string
+                alphabet = string.ascii_letters + string.digits + string.punctuation
+                default_admin_password = ''.join(secrets.choice(alphabet) for _ in range(16))
+                logger.warning("=" * 80)
+                logger.warning("DEFAULT_ADMIN_PASSWORD 환경 변수가 설정되지 않았습니다!")
+                logger.warning(f"임시 관리자 비밀번호가 생성되었습니다: {default_admin_password}")
+                logger.warning("이 비밀번호를 안전한 곳에 저장하고 즉시 변경하세요!")
+                logger.warning("프로덕션 환경에서는 반드시 DEFAULT_ADMIN_PASSWORD 환경 변수를 설정하세요.")
+                logger.warning("=" * 80)
+
             self.create_user(
                 username="admin",
                 password=default_admin_password,

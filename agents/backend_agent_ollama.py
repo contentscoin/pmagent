@@ -24,6 +24,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("BackendAgentOllama")
 
+
+class OllamaAPIError(Exception):
+    """Ollama API 호출 시 발생하는 예외"""
+    pass
+
 class BackendAgentOllama(BaseTool):
     """
     Ollama를 통해 백엔드 개발 작업을 수행하는 에이전트
@@ -232,7 +237,7 @@ class BackendAgentOllama(BaseTool):
             
             if response.status_code != 200:
                 logger.error(f"Ollama API 오류: {response.status_code}, {response.text}")
-                raise Exception(f"Ollama API 오류: {response.status_code}")
+                raise OllamaAPIError(f"Ollama API 오류 (HTTP {response.status_code}): {response.text[:200]}")
                 
             return response.json()
             
