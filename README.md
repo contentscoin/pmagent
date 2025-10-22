@@ -2,19 +2,40 @@
 
 PM Agent MCP(Model Context Protocol) 서버는 프로젝트 관리 및 다양한 AI 에이전트 조정을 위한 JSON-RPC 2.0 기반 서버입니다.
 
+## 🚀 빠른 시작
+
+**처음 사용하시나요?** [빠른 시작 가이드 (QUICKSTART.md)](QUICKSTART.md)를 확인하세요!
+
+```bash
+# 1. 환경 설정
+cp .env.example .env
+# .env 파일에서 DEFAULT_ADMIN_PASSWORD 설정
+
+# 2. 의존성 설치
+pip install fastapi uvicorn pydantic sqlalchemy pyjwt python-dotenv aiohttp requests
+
+# 3. 서버 시작
+python run_server.py
+
+# 4. CLI 도구로 테스트
+python cli.py demo
+```
+
 ## 주요 기능
 
 - 프로젝트 및 태스크 관리
 - 다양한 AI 에이전트 관리 (PM, 디자이너, 프론트엔드, 백엔드, AI 엔지니어)
-- 데이터 지속성 (로컬 파일 저장)
+- 데이터 지속성 (SQLite 데이터베이스)
+- JSON-RPC 2.0 기반 MCP 프로토콜
 - Cursor 편집기와의 통합
+- CLI 관리 도구 제공
 
 ## 설치
 
 ```bash
 # 저장소 복제
-git clone https://github.com/your-username/pmagent-mcp-server.git
-cd pmagent-mcp-server
+git clone https://github.com/contentscoin/pmagent.git
+cd pmagent
 
 # 의존성 설치
 pip install -r requirements.txt
@@ -52,10 +73,53 @@ python -m pmagent.mcp_server
 
 서버는 기본적으로 `http://localhost:8082`에서 실행됩니다.
 
+## CLI 관리 도구
+
+PMAgent는 명령줄 관리 도구를 제공합니다:
+
+```bash
+# 서버 상태 확인
+python cli.py check
+
+# MCP 도구 목록 조회
+python cli.py tools
+
+# 프로젝트 생성
+python cli.py create-project "프로젝트명" --description "설명"
+
+# 프로젝트 목록 조회
+python cli.py projects
+
+# 작업 생성
+python cli.py create-task <PROJECT_ID> "작업명" --description "설명"
+
+# 작업 목록 조회
+python cli.py tasks <PROJECT_ID>
+
+# 전체 데모 실행
+python cli.py demo
+```
+
+자세한 사용법은 `python cli.py --help`를 참조하세요.
+
+## 테스트
+
+자동화된 테스트를 실행하려면:
+
+```bash
+# 테스트 클라이언트 실행
+python test_client.py
+
+# 특정 URL로 테스트
+python test_client.py http://localhost:8082
+```
+
 ## API 엔드포인트
 
 - **메인 API**: `/api` - JSON-RPC 2.0 요청 처리
 - **루트**: `/` - 서버 상태 확인
+- **MCP 호출**: `/mcp/invoke` - MCP JSON-RPC 호출
+- **MCP 도구**: `/mcp/tools` - 사용 가능한 도구 목록
 
 ## 주요 메서드
 
