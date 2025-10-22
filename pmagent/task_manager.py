@@ -5,6 +5,8 @@ import os
 import json
 import uuid
 import logging
+import time
+import shutil
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from pathlib import Path
@@ -32,8 +34,12 @@ def load_requests() -> Dict[str, Any]:
         with open(REQUESTS_FILE, "r", encoding="utf-8") as f:
             try:
                 return json.load(f)
-            except json.JSONDecodeError:
-                logger.error(f"잘못된 JSON 포맷: {REQUESTS_FILE}")
+            except json.JSONDecodeError as e:
+                logger.error(f"잘못된 JSON 포맷: {REQUESTS_FILE}, 에러: {str(e)}")
+                # 백업 파일 생성
+                backup_file = f"{REQUESTS_FILE}.backup.{int(time.time())}"
+                shutil.copy2(REQUESTS_FILE, backup_file)
+                logger.warning(f"손상된 파일을 백업했습니다: {backup_file}")
                 return {}
     else:
         # 파일이 없는 경우 빈 딕셔너리 생성 후 저장

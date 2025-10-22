@@ -817,12 +817,13 @@ Ensure the output is ONLY the JSON array, starting with `[` and ending with `]`.
             return
 
         if not request_id:
-            # TODO: 실제 환경에서는 처리할 requestId를 결정하는 로직 필요
-            # 예: self.assigned_requests 리스트에서 가져오기 등
-            logger.warning("No specific requestId provided to check tasks for.")
-            # 임시로 모든 요청에 대해 확인하거나, 특정 로직 추가 가능
-            # 여기서는 일단 리턴 (또는 첫 번째 요청 시도?)
-            return
+            # 현재 프로젝트 ID를 사용하여 작업 확인
+            if self.current_project_id:
+                request_id = self.current_project_id
+                logger.info(f"Using current project ID as request_id: {request_id}")
+            else:
+                logger.warning("No specific requestId provided and no current project. Cannot check tasks.")
+                return
 
         logger.info(f"PM Agent {self.agent_id} checking for next task for request {request_id}...")
         get_task_params = {

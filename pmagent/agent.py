@@ -10,6 +10,16 @@ from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+
+class MCPToolError(Exception):
+    """MCP 도구 호출 시 발생하는 예외"""
+    pass
+
+
+class MCPConnectionError(MCPToolError):
+    """MCP 서버 연결 실패 시 발생하는 예외"""
+    pass
+
 class PMAgent:
     """프로젝트 관리 MCP 에이전트 클래스"""
     
@@ -68,7 +78,7 @@ class PMAgent:
         async with self.session.get(f"{self.server_url}/tools") as response:
             if response.status != 200:
                 text = await response.text()
-                raise Exception(f"도구 목록 조회 실패: {text}")
+                raise MCPConnectionError(f"도구 목록 조회 실패 (HTTP {response.status}): {text}")
             
             data = await response.json()
             self.tools = {tool["name"]: tool for tool in data["tools"]}
@@ -85,7 +95,7 @@ class PMAgent:
         
         response = self.sync_session.get(f"{self.server_url}/tools")
         if response.status_code != 200:
-            raise Exception(f"도구 목록 조회 실패: {response.text}")
+            raise MCPConnectionError(f"도구 목록 조회 실패 (HTTP {response.status_code}): {response.text}")
         
         data = response.json()
         self.tools = {tool["name"]: tool for tool in data["tools"]}
@@ -123,7 +133,7 @@ class PMAgent:
         ) as response:
             if response.status != 200:
                 text = await response.text()
-                raise Exception(f"도구 호출 실패({tool_name}): {text}")
+                raise MCPToolError(f"도구 호출 실패 ({tool_name}, HTTP {response.status}): {text}")
             
             result = await response.json()
             return result
@@ -160,7 +170,7 @@ class PMAgent:
         )
         
         if response.status_code != 200:
-            raise Exception(f"도구 호출 실패({tool_name}): {response.text}")
+            raise MCPToolError(f"도구 호출 실패 ({tool_name}, HTTP {response.status_code}): {response.text}")
         
         return response.json()
     

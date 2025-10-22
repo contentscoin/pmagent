@@ -55,9 +55,9 @@ async def lifespan(app: FastAPI):
         db_manager.init_agent_shared_db()
         logger.info("Databases initialized successfully.")
     except Exception as e:
-        logger.error(f"Error initializing databases: {str(e)}")
-        # DB 초기화 실패 시 서버를 계속 실행할지, 아니면 종료할지 결정 필요
-        # 여기서는 로깅만 하고 계속 진행하도록 둡니다.
+        logger.critical(f"Critical error initializing databases: {str(e)}")
+        logger.critical("Server cannot start without database initialization. Shutting down.")
+        raise RuntimeError(f"Database initialization failed: {str(e)}") from e
 
     yield # 애플리케이션 실행
 
