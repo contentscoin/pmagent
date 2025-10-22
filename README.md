@@ -20,11 +20,34 @@ cd pmagent-mcp-server
 pip install -r requirements.txt
 ```
 
+## 환경 변수 설정
+
+서버를 실행하기 전에 필요한 환경 변수를 설정하세요. `.env` 파일을 생성하거나 환경 변수를 직접 설정할 수 있습니다:
+
+```bash
+# 필수: 관리자 계정 비밀번호 (보안을 위해 강력한 비밀번호 사용)
+export DEFAULT_ADMIN_PASSWORD="your_strong_password_here"
+
+# 선택: Ollama API 설정 (기본값: http://localhost:11434/api)
+export OLLAMA_API_BASE="http://localhost:11434/api"
+
+# 선택: 사용할 Ollama 모델 (기본값: llama3.2:latest)
+export OLLAMA_MODEL="llama3.2:latest"
+```
+
+**⚠️ 보안 주의사항:**
+- `DEFAULT_ADMIN_PASSWORD`를 설정하지 않으면 시스템이 랜덤 비밀번호를 생성합니다
+- 생성된 비밀번호는 로그에 한 번만 표시되므로 반드시 안전한 곳에 저장하세요
+- 프로덕션 환경에서는 반드시 강력한 비밀번호를 환경 변수로 설정하세요
+
 ## 실행
 
 ```bash
-# 서버 실행
-python server.py
+# 서버 실행 (권장)
+python run_server.py
+
+# 또는 모듈로 실행
+python -m pmagent.mcp_server
 ```
 
 서버는 기본적으로 `http://localhost:8082`에서 실행됩니다.
@@ -122,19 +145,21 @@ MIT
 
 ```json
 {
-  "url": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
-  "apiKey": "0c8f6386-e443-4b8b-95ba-22a40d5f5e38",
-  "mcpUrl": "https://successive-glenn-contentscoin-34b6608c.koyeb.app/mcp",
-  "localUrl": "http://localhost:4000/api/mcp",
+  "url": "https://your-server-url.koyeb.app",
+  "apiKey": "your-api-key",
+  "mcpUrl": "https://your-server-url.koyeb.app/mcp",
+  "localUrl": "http://localhost:8082/mcp",
   "environments": {
-    "production": "https://successive-glenn-contentscoin-34b6608c.koyeb.app",
-    "local": "http://localhost:4000/api/mcp"
-  },
-  "client": {
-    // MCP 클라이언트 설정...
+    "production": "https://your-server-url.koyeb.app",
+    "local": "http://localhost:8082/mcp"
   }
 }
 ```
+
+**⚠️ 보안 주의사항:**
+- `config.json`에 실제 API 키와 URL을 포함하지 마세요
+- 민감한 정보는 환경 변수나 `.env` 파일을 사용하세요
+- `.env` 파일은 `.gitignore`에 포함되어 있어 Git에 커밋되지 않습니다
 
 ### MCP 서버 테스트
 
